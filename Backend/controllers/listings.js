@@ -56,12 +56,20 @@ module.exports.showListing = async (req, res) => {
 // Create Listing (POST /api/listings)
 // Creates a new listing and returns the created object or a success message as JSON.
 module.exports.createListing = async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "Image file is required" });
+  }
+
   let response = await geocodingClient
     .forwardGeocode({
       query: req.body.listing.location,
       limit: 1,
     })
     .send();
+
+  if (!response.body.features || response.body.features.length === 0) {
+    return res.status(400).json({ error: "Invalid location. Could not geocode the address." });
+  }
 
   // Construct URL for local file storage
   const filename = req.file.filename;
@@ -115,7 +123,11 @@ module.exports.renderEditForm = async (req, res) => {
 // Updates a listing and returns the updated object as JSON.
 module.exports.updateListing = async (req, res) => {
   let { id } = req.params;
-  let listing = await Listing.findByIdAndUpdate(id, { ...req.body.listing });
+  let listing = await Listing.findByIdAndUpdate(id, { ...req.body.listing }, { new: true, runValidators: true });
+
+  if (!listing) {
+    return res.status(404).json({ error: "Listing not found" });
+  }
 
   if (req.file) {
     const filename = req.file.filename;
@@ -124,15 +136,26 @@ module.exports.updateListing = async (req, res) => {
     await listing.save();
   }
   
+  // Transform image URL to full URL
+  const listingObj = listing.toObject();
+  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    listingObj.image.url = baseUrl + listingObj.image.url;
+  }
+  
   // Return a success message and the updated listing data.
-  res.json({ message: "Property Details Updated!", listing });
+  res.json({ message: "Property Details Updated!", listing: listingObj });
 };
 
 // Delete Listing (DELETE /api/listings/:id)
 // Deletes a listing and returns a success message as JSON.
 module.exports.destroyListing = async (req, res) => {
   let { id } = req.params;
-  await Listing.findByIdAndDelete(id);
+  const listing = await Listing.findByIdAndDelete(id);
+
+  if (!listing) {
+    return res.status(404).json({ error: "Listing not found" });
+  }
 
   res.json({ message: "Property Deleted!" });
 };

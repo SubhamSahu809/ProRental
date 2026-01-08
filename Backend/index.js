@@ -108,7 +108,27 @@ app.use("/api/listings", listingsRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+    // Check if headers have already been sent
+    if (res.headersSent) {
+        return next(err);
+    }
+    
+    // Handle multer errors specifically
+    if (err.name === 'MulterError') {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'File size too large. Maximum size is 5MB.' });
+        }
+        return res.status(400).json({ error: err.message || 'File upload error' });
+    }
+    
+    // Handle validation errors
     let { statusCode = 500, message = "Something went wrong!" } = err;
+    
+    // If error message is an object (from mongoose validation), extract the message
+    if (typeof message === 'object' && message.message) {
+        message = message.message;
+    }
+    
     res.status(statusCode).json({ error: message });
 });
 

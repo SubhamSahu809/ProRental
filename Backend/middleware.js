@@ -23,9 +23,12 @@ module.exports.isOwner = async(req, res, next) => {
     let { id } = req.params;
     let listing = await Listing.findById(id);
 
-    if (!listing.owner._id.equals(res.locals.currUser._id)){
-        req.flash("error", "You are not the owner of this property.");
-        return res.redirect(`/listings/${id}`);
+    if (!listing) {
+        return res.status(404).json({ error: "Listing not found" });
+    }
+
+    if (!req.user || !listing.owner._id.equals(req.user._id)){
+        return res.status(403).json({ error: "You are not the owner of this property." });
     }
     next();
 }
@@ -60,9 +63,13 @@ module.exports.validateReview = (req, res, next) => {
 module.exports.isReviewAuthor = async(req, res, next) => {
     let { id, reviewId } = req.params;
     let review = await Review.findById(reviewId);
-    if (!review.author.equals(res.locals.currUser._id)){
-        req.flash("error", "You are not the owner of this property.");
-        return res.redirect(`/listings/${id}`);
+    
+    if (!review) {
+        return res.status(404).json({ error: "Review not found" });
+    }
+    
+    if (!req.user || !review.author.equals(req.user._id)){
+        return res.status(403).json({ error: "You are not the author of this review." });
     }
     next();
 }

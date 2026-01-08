@@ -1,0 +1,100 @@
+# Dependencies
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables - IMPORTANT: Keep these secret!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Backend specific environment files
+Backend/.env
+Backend/.env.local
+Backend/.env.*
+Backend/env
+Backend/environment
+
+# Frontend specific environment files
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.*.local
+
+# Build outputs
+dist/
+build/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Upload directories (Backend) - ignore uploaded files but keep directory structure
+Backend/uploads/*
+!Backend/uploads/.gitkeep
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# Vite specific (Frontend)
+Frontend/dist/
+Frontend/.vite/
+Frontend/dist-ssr/
+
+# React/Vite build outputs
+Frontend/build/
+
+# Misc
+.cache/
+.parcel-cache/
+.next/
+out/
+.nuxt/
+.vuepress/dist/

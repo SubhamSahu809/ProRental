@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X } from "lucide-react";
+import { authAPI } from "../utils/api";
 
 const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
   const [formData, setFormData] = useState({
@@ -24,23 +24,9 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:8080/users/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(formData),
-      });
+      const { ok, data } = await authAPI.login(formData.email, formData.password);
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        throw new Error("Invalid response from server");
-      }
-
-      if (response.ok) {
+      if (ok) {
         onClose();
         setFormData({ email: "", password: "" });
         window.location.reload();

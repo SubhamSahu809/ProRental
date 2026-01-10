@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import AddPropertyPage from "./pages/AddProperty.jsx";
 import LoginPage from "./pages/Login.jsx";
-import Property from "./components/Property.jsx";
+import Property from "./pages/Property.jsx";
 import MyProperties from "./pages/MyProperties.jsx";
 import "./App.css";
 

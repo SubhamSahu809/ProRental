@@ -3,17 +3,15 @@ const router = express.Router();
 const User = require("../models/user.js");
 const wrapAsync = require("../utils/wrapAsync");
 const passport = require("passport");
-const { saveRedirectUrl } = require("../middleware.js");
 
 const userController = require("../controllers/users.js");
 
-// SignUp Route: Handles user registration. The form rendering part is removed.
+// SignUp Route: Handles user registration.
 router.post("/signup", wrapAsync(userController.signup));
 
 // Login Route: Handles user login with proper JSON error handling.
 router.post(
     "/login", 
-    saveRedirectUrl,
     (req, res, next) => {
         passport.authenticate("local", (err, user, info) => {
             if (err) {

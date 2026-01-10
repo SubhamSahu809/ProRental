@@ -13,14 +13,10 @@ router.get("/", wrapAsync(listingController.index));
 // Using "owner" prefix to avoid conflicts with listing IDs
 router.get("/owner/properties", isLoggedIn, wrapAsync(listingController.getUserListings));
 
-// Create a new listing
-// The "new" route for rendering a form is not needed in a pure API.
-// The frontend will handle its own form rendering.
-
 // Show Route: Fetches a single listing and returns it as JSON.
 router.get("/:id", wrapAsync(listingController.showListing));
 
-// Create Route: Handles form data submission and returns the new listing as JSON.
+// Create Route: Creates a new listing and returns it as JSON.
 router.post(
   "/",
   isLoggedIn,

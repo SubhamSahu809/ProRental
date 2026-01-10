@@ -2,28 +2,14 @@ const Listing = require("../models/listing");
 const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
 const mapToken = process.env.MAP_TOKEN;
 const geocodingClient = mbxGeocoding({ accessToken: mapToken });
+const { cloudinary } = require("../cloudConfig.js");
 
 // All Listings (GET /api/listings)
 // Returns all listings as a JSON array.
 module.exports.index = async (req, res) => {
   const allListings = await Listing.find({});
-  
-  // Transform image URLs to full URLs
-  const listingsWithFullUrls = allListings.map(listing => {
-    const listingObj = listing.toObject();
-    if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-      // Convert relative URL to full URL
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      listingObj.image.url = baseUrl + listingObj.image.url;
-    }
-    return listingObj;
-  });
-  
-  res.json(listingsWithFullUrls);
+  res.json(allListings);
 };
-
-// Render New Form (GET /api/listings/new)
-// This is not needed in an API. The frontend will handle its own forms.
 
 // Show Listing (GET /api/listings/:id)
 // Returns a single listing with populated reviews and owner details as JSON.
@@ -39,18 +25,10 @@ module.exports.showListing = async (req, res) => {
     .populate("owner");
 
   if (!listing) {
-    // Return a 404 error with a JSON message instead of redirecting.
     return res.status(404).json({ error: "Property does not exist!" });
   }
   
-  // Transform image URL to full URL
-  const listingObj = listing.toObject();
-  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    listingObj.image.url = baseUrl + listingObj.image.url;
-  }
-  
-  res.json(listingObj);
+  res.json(listing);
 };
 
 // Create Listing (POST /api/listings)
@@ -71,9 +49,11 @@ module.exports.createListing = async (req, res, next) => {
     return res.status(400).json({ error: "Invalid location. Could not geocode the address." });
   }
 
-  // Construct URL for local file storage
-  const filename = req.file.filename;
-  const url = `/uploads/${filename}`;
+  // Extract Cloudinary URL and public_id from multer-storage-cloudinary response
+  // req.file.path contains the secure_url (full HTTPS URL)
+  // req.file.filename contains the public_id (may include folder path)
+  const url = req.file.path || req.file.secure_url; // Cloudinary URL (full URL)
+  const filename = req.file.filename || req.file.public_id; // Cloudinary public_id (includes folder if specified)
   
   const listingData = { ...req.body.listing };
   
@@ -92,21 +72,14 @@ module.exports.createListing = async (req, res, next) => {
   newListing.geometry = response.body.features[0].geometry;
   let savedListing = await newListing.save();
 
-  // Transform image URL to full URL
-  const listingObj = savedListing.toObject();
-  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    listingObj.image.url = baseUrl + listingObj.image.url;
-  }
-
   // Return a success message and the new listing data.
   res.status(201).json({
     message: "New Property Created!",
-    listing: listingObj,
+    listing: savedListing,
   });
 };
 
-// Render Edit Form (GET /api/listings/:id/edit)
+// Get Listing for Edit (GET /api/listings/:id/edit)
 // Returns a single listing's data for editing as JSON.
 module.exports.renderEditForm = async (req, res) => {
   let { id } = req.params;
@@ -123,39 +96,58 @@ module.exports.renderEditForm = async (req, res) => {
 // Updates a listing and returns the updated object as JSON.
 module.exports.updateListing = async (req, res) => {
   let { id } = req.params;
-  let listing = await Listing.findByIdAndUpdate(id, { ...req.body.listing }, { new: true, runValidators: true });
+  let listing = await Listing.findById(id);
 
   if (!listing) {
     return res.status(404).json({ error: "Listing not found" });
   }
 
-  if (req.file) {
-    const filename = req.file.filename;
-    const url = `/uploads/${filename}`;
+  // If a new image is uploaded, delete the old image from Cloudinary
+  if (req.file && listing.image && listing.image.filename) {
+    try {
+      // Delete old image from Cloudinary using public_id
+      await cloudinary.uploader.destroy(listing.image.filename);
+    } catch (error) {
+      console.error("Error deleting old image from Cloudinary:", error);
+      // Continue with update even if deletion fails
+    }
+    
+    // Update with new image from Cloudinary
+    const url = req.file.path || req.file.secure_url; // Cloudinary URL (full URL)
+    const filename = req.file.filename || req.file.public_id; // Cloudinary public_id (includes folder if specified)
     listing.image = { url, filename };
-    await listing.save();
   }
-  
-  // Transform image URL to full URL
-  const listingObj = listing.toObject();
-  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    listingObj.image.url = baseUrl + listingObj.image.url;
-  }
+
+  // Update other listing fields
+  Object.assign(listing, req.body.listing);
+  await listing.save();
   
   // Return a success message and the updated listing data.
-  res.json({ message: "Property Details Updated!", listing: listingObj });
+  res.json({ message: "Property Details Updated!", listing });
 };
 
 // Delete Listing (DELETE /api/listings/:id)
 // Deletes a listing and returns a success message as JSON.
 module.exports.destroyListing = async (req, res) => {
   let { id } = req.params;
-  const listing = await Listing.findByIdAndDelete(id);
+  const listing = await Listing.findById(id);
 
   if (!listing) {
     return res.status(404).json({ error: "Listing not found" });
   }
+
+  // Delete image from Cloudinary if it exists
+  if (listing.image && listing.image.filename) {
+    try {
+      await cloudinary.uploader.destroy(listing.image.filename);
+    } catch (error) {
+      console.error("Error deleting image from Cloudinary:", error);
+      // Continue with listing deletion even if image deletion fails
+    }
+  }
+
+  // Delete the listing from database
+  await Listing.findByIdAndDelete(id);
 
   res.json({ message: "Property Deleted!" });
 };
@@ -169,18 +161,7 @@ module.exports.getUserListings = async (req, res) => {
     }
     
     const userListings = await Listing.find({ owner: req.user._id });
-    
-    // Transform image URLs to full URLs
-    const listingsWithFullUrls = userListings.map(listing => {
-      const listingObj = listing.toObject();
-      if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        listingObj.image.url = baseUrl + listingObj.image.url;
-      }
-      return listingObj;
-    });
-    
-    res.json(listingsWithFullUrls);
+    res.json(userListings);
   } catch (error) {
     console.error('Error in getUserListings:', error);
     res.status(500).json({ error: "Failed to fetch user listings" });

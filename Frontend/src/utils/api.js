@@ -1,5 +1,5 @@
 // API configuration and utilities
-const API_BASE_URL = "http://localhost:8080";
+const API_BASE_URL = "https://prorental.onrender.com";
 
 // Helper function for API calls
 const apiCall = async (endpoint, options = {}) => {

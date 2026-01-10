@@ -18,16 +18,27 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (only when dropdown is open)
   useEffect(() => {
+    if (!isProfileDropdownOpen) return;
+
     const handleClickOutside = (event) => {
+      // Check if click is outside the dropdown container
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsProfileDropdownOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+    // Use click event with small delay to ensure dropdown has rendered after state update
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("click", handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [isProfileDropdownOpen]);
 
   const handleAddProperty = () => {
     navigate("/add-property");
@@ -121,7 +132,12 @@ const Navbar = () => {
           <div className="hidden md:block relative" ref={dropdownRef}>
             <UserAvatar
               user={currentUser}
-              onClick={() => currentUser && setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+              onClick={(e) => {
+                if (currentUser) {
+                  e.stopPropagation();
+                  setIsProfileDropdownOpen(!isProfileDropdownOpen);
+                }
+              }}
               showDropdownIcon={!!currentUser}
             />
             {currentUser && (
@@ -138,7 +154,8 @@ const Navbar = () => {
           <div className="md:hidden relative" ref={dropdownRef}>
             <UserAvatar
               user={currentUser}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (currentUser) {
                   setIsProfileDropdownOpen(!isProfileDropdownOpen);
                 } else {

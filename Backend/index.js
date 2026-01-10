@@ -55,15 +55,21 @@ if (process.env.NODE_ENV !== "production") {
   const allowedOrigins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    process.env.CLIENT_URL, // production frontend
+    "https://prorental.vercel.app",
+    process.env.CLIENT_URL, // production frontend (fallback)
   ];
   
   app.use(
     cors({
       origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
+          // Log the origin for debugging
+          console.log(`❌ CORS blocked origin: ${origin}`);
           callback(new Error("Not allowed by CORS"));
         }
       },

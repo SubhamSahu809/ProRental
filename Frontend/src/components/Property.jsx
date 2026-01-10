@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Heart, Camera, ChevronLeft, ChevronRight } from 'lucide-react'
+import { propertyAPI } from '../utils/api.js'
 
 const Property = () => {
   const { id } = useParams()
@@ -18,15 +19,7 @@ const Property = () => {
   const fetchProperty = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`http://localhost:8080/api/listings/${id}`, {
-        credentials: 'include'
-      })
-      
-      if (!response.ok) {
-        throw new Error('Property not found')
-      }
-      
-      const data = await response.json()
+      const data = await propertyAPI.getById(id)
       
       // Transform backend data to component format
       const transformedProperty = {

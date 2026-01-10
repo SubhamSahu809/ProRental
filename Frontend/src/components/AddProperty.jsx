@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Upload, Home, Bath, BedDouble, MapPin, DollarSign, ImagePlus, X, Check, AlertCircle, Building, TreePine, Store } from "lucide-react";
+import { propertyAPI } from "../utils/api.js";
 
 export default function AddProperty() {
   const [mainCategory, setMainCategory] = useState('residential');
@@ -170,16 +171,10 @@ export default function AddProperty() {
         formDataToSend.append('listing[image]', formData.photos[0]);
       }
 
-      // Send to backend API
-      const response = await fetch('http://localhost:8080/api/listings', {
-        method: 'POST',
-        credentials: 'include', // Important for session cookies
-        body: formDataToSend
-      });
+      // Send to backend API using API utility
+      const result = await propertyAPI.create(formDataToSend);
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (result.ok) {
         setSubmitStatus('success');
         // Reset form after successful submission
         setFormData({
@@ -190,7 +185,7 @@ export default function AddProperty() {
         });
       } else {
         setSubmitStatus('error');
-        setErrors({ submit: data.error || 'Failed to add property. Please try again.' });
+        setErrors({ submit: result.data?.error || 'Failed to add property. Please try again.' });
       }
     } catch (error) {
       console.error('Error adding property:', error);

@@ -5,6 +5,8 @@ if (process.env.NODE_ENV !== "production") {
     require("dotenv").config();
 }
 
+const PORT = process.env.PORT || 3000;
+
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
@@ -14,7 +16,7 @@ const ExpressError = require("./utils/ExpressError.js");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const passport = require("passport");
-const localStrategy = require("passport-local");
+const LocalStrategy = require("passport-local").Strategy;
 const User = require("./models/user.js");
 const cors = require("cors"); // New: Import cors middleware
 

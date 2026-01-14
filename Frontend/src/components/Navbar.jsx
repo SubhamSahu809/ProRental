@@ -8,6 +8,7 @@ import UserAvatar from "./navbar/UserAvatar";
 import ProfileDropdown from "./navbar/ProfileDropdown";
 import LoginModal from "./LoginModal";
 import SignupModal from "./SignupModal";
+import API_URL from "../config/api";
 
 const Navbar = () => {
   const { currentUser, logout, setCurrentUser } = useAuth();
@@ -87,6 +88,109 @@ const Navbar = () => {
   const switchToLogin = () => {
     setIsSignupModalOpen(false);
     setIsLoginModalOpen(true);
+  };
+
+  const handleContact = () => {
+    // Scroll to contact section on home page
+    const contactSection = document.getElementById('contact');
+    if (contactSection) {
+      contactSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    setIsMenuOpen(false);
+  };
+
+  // Check if user is authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch(`${API_URL}/users/me`, {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUser(data.user);
+        } else if (response.status === 401) {
+          // 401 is expected when not logged in - this is normal, not an error
+          setCurrentUser(null);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        // Only log actual network errors, not expected 401s
+        if (!error.message.includes('Failed to fetch')) {
+          console.error("Error checking auth:", error);
+        }
+        setCurrentUser(null);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // If clicking inside dropdown, don't close immediately
+      if (dropdownRef.current && dropdownRef.current.contains(event.target)) {
+        // If clicking a button, let it handle the click first
+        const clickedButton = event.target.closest('button');
+        if (clickedButton) {
+          // Close dropdown after a short delay to let onClick fire
+          setTimeout(() => {
+            setIsProfileDropdownOpen(false);
+          }, 150);
+          return;
+        }
+        // If clicking elsewhere in dropdown, don't close
+        return;
+      }
+      // Close if clicking outside the dropdown
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+    // Use a slight delay to ensure button clicks fire first
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsProfileDropdownOpen(false);
+    try {
+      const response = await fetch(`${API_URL}/users/logout`, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (response.ok) {
+        setCurrentUser(null);
+        navigate("/");
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Logout failed:", response.status, errorData);
+        alert(`Logout failed: ${errorData.error || response.status}`);
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      alert(`Logout error: ${error.message}`);
+    }
+  };
+
+  const handleMyProperties = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsProfileDropdownOpen(false);
+    setIsMenuOpen(false);
+    navigate("/my-properties");
   };
 
   return (

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { propertyAPI } from "../utils/api";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
-import LoadingSpinner from "../components/shared/LoadingSpinner";
-import PropertyCard from "../components/shared/PropertyCard";
-import { Home } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Home, Edit, Trash2 } from 'lucide-react';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import API_URL from '../config/api';
 
 function MyProperties() {
   const [properties, setProperties] = useState([]);
@@ -18,12 +16,16 @@ function MyProperties() {
 
   const fetchMyProperties = async () => {
     try {
-      const data = await propertyAPI.getMyProperties();
-      setProperties(data);
-    } catch (error) {
-      console.error("Error fetching properties:", error);
-      if (error.message === "Unauthorized") {
-        navigate("/");
+      const response = await fetch(`${API_URL}/api/listings/owner/properties`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
+      if (response.status === 401) {
+        setProperties([]);
+        navigate('/');
         return;
       }
       alert(`Error loading properties: ${error.message}`);
@@ -39,11 +41,13 @@ function MyProperties() {
     }
 
     try {
-      const success = await propertyAPI.delete(id);
-      if (success) {
-        setProperties(properties.filter((prop) => prop._id !== id));
-      } else {
-        alert("Failed to delete property. Please try again.");
+      const response = await fetch(`${API_URL}/api/listings/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        setProperties(properties.filter(prop => prop._id !== id));
       }
     } catch (error) {
       console.error("Error deleting property:", error);

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { authAPI } from "../utils/api";
+import { X } from "lucide-react";
+import API_URL from "../config/api";
 
 const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
   const [formData, setFormData] = useState({
@@ -34,14 +35,28 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
     }
 
     try {
-      const { ok, data } = await authAPI.signup({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        password: formData.password,
+      const response = await fetch(`${API_URL}/users/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password
+        }),
       });
 
-      if (ok) {
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        throw new Error("Invalid response from server");
+      }
+
+      if (response.ok) {
         onClose();
         setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "" });
         window.location.reload();
@@ -50,7 +65,7 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
       }
     } catch (err) {
       if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
-        setError("Network error. Please check your connection and ensure the backend server is running on port 8080.");
+        setError("Network error. Please check your connection and ensure the backend server is running.");
       } else {
         setError(err.message || "An unexpected error occurred. Please try again.");
       }

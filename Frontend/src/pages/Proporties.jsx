@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { propertyAPI } from "../utils/api";
-import LoadingSpinner from "../components/shared/LoadingSpinner";
-import PropertyCard from "../components/shared/PropertyCard";
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import API_URL from '../config/api'
 
 function Proporties() {
   const [propertyType, setPropertyType] = useState("buy");
@@ -16,7 +14,11 @@ function Proporties() {
 
   const fetchProperties = async () => {
     try {
-      const data = await propertyAPI.getAll();
+      const response = await fetch(`${API_URL}/api/listings`, {
+        credentials: 'include'
+      })
+      const data = await response.json()
+      
       // Transform backend data to match frontend format
       const transformedProperties = data.map((listing) => ({
         id: listing._id,

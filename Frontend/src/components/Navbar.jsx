@@ -19,27 +19,6 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Close dropdown when clicking outside (only when dropdown is open)
-  useEffect(() => {
-    if (!isProfileDropdownOpen) return;
-
-    const handleClickOutside = (event) => {
-      // Check if click is outside the dropdown container
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsProfileDropdownOpen(false);
-      }
-    };
-
-    // Use click event with small delay to ensure dropdown has rendered after state update
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("click", handleClickOutside);
-    };
-  }, [isProfileDropdownOpen]);
 
   const handleAddProperty = () => {
     navigate("/add-property");
@@ -49,35 +28,6 @@ const Navbar = () => {
   const handleLogin = () => {
     setIsLoginModalOpen(true);
     setIsMenuOpen(false);
-  };
-
-  const handleContact = () => {
-    const contactSection = document.getElementById("contact");
-    if (contactSection) {
-      contactSection.scrollIntoView({ behavior: "smooth" });
-    }
-    setIsMenuOpen(false);
-  };
-
-  const handleLogout = async (e) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    setIsProfileDropdownOpen(false);
-    const success = await logout();
-    if (success) {
-      navigate("/");
-      setTimeout(() => window.location.reload(), 100);
-    } else {
-      alert("Logout failed. Please try again.");
-    }
-  };
-
-  const handleMyProperties = (e) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    setIsProfileDropdownOpen(false);
-    setIsMenuOpen(false);
-    navigate("/my-properties");
   };
 
   const switchToSignup = () => {
@@ -128,6 +78,8 @@ const Navbar = () => {
 
   // Close dropdown when clicking outside
   useEffect(() => {
+    if (!isProfileDropdownOpen) return;
+
     const handleClickOutside = (event) => {
       // If clicking inside dropdown, don't close immediately
       if (dropdownRef.current && dropdownRef.current.contains(event.target)) {
@@ -153,7 +105,7 @@ const Navbar = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [isProfileDropdownOpen]);
 
   const handleLogout = async (e) => {
     if (e) {

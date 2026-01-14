@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Home, Edit, Trash2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import LoadingSpinner from '../components/shared/LoadingSpinner';
+import PropertyCard from '../components/shared/PropertyCard';
 import API_URL from '../config/api';
 
 function MyProperties() {
@@ -28,6 +30,15 @@ function MyProperties() {
         navigate('/');
         return;
       }
+      
+      if (response.ok) {
+        const data = await response.json();
+        setProperties(data);
+      } else {
+        throw new Error('Failed to load properties');
+      }
+    } catch (error) {
+      console.error("Error loading properties:", error);
       alert(`Error loading properties: ${error.message}`);
       setProperties([]);
     } finally {

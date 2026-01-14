@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import LoadingSpinner from '../components/shared/LoadingSpinner'
+import PropertyCard from '../components/shared/PropertyCard'
 import API_URL from '../config/api'
 
 function Proporties() {

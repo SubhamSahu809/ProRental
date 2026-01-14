@@ -27,24 +27,43 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Allow origins from environment variable or default to localhost
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',')
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
     : [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ];
 
+// Log allowed origins (always log for debugging)
+console.log("Allowed CORS origins:", allowedOrigins);
+
 const corsOptions = {
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin) {
             return callback(null, true);
         }
-        return callback(new Error("Not allowed by CORS"));
+        if (allowedOrigins.includes(origin)) {
+            console.log(`CORS allowed origin: ${origin}`);
+            return callback(null, true);
+        }
+        // Log blocked origin for debugging
+        console.log(`❌ CORS blocked origin: ${origin}`);
+        console.log(`✅ Allowed origins: ${allowedOrigins.join(', ')}`);
+        return callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Type', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
 };
+
+// Apply CORS middleware
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+
+// Explicitly handle preflight requests
+app.options('*', cors(corsOptions));
 
 app.use(express.urlencoded({extended: true}));
 app.use(methodOverride("_method"));

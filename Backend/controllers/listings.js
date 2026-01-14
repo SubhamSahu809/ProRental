@@ -45,15 +45,17 @@ module.exports.createListing = async (req, res, next) => {
     })
     .send();
 
-  if (!response.body.features || response.body.features.length === 0) {
-    return res.status(400).json({ error: "Invalid location. Could not geocode the address." });
+  // Handle image URL - Cloudinary provides full URL in path, local storage uses filename
+  let imageUrl, imageFilename;
+  if (req.file.path) {
+    // Cloudinary storage - path contains full URL
+    imageUrl = req.file.path;
+    imageFilename = req.file.filename || req.file.originalname;
+  } else {
+    // Local storage - construct relative URL
+    imageFilename = req.file.filename;
+    imageUrl = `/uploads/${imageFilename}`;
   }
-
-  // Extract Cloudinary URL and public_id from multer-storage-cloudinary response
-  // req.file.path contains the secure_url (full HTTPS URL)
-  // req.file.filename contains the public_id (may include folder path)
-  const url = req.file.path || req.file.secure_url; // Cloudinary URL (full URL)
-  const filename = req.file.filename || req.file.public_id; // Cloudinary public_id (includes folder if specified)
   
   const listingData = { ...req.body.listing };
   
@@ -68,9 +70,16 @@ module.exports.createListing = async (req, res, next) => {
   
   const newListing = new Listing(listingData);
   newListing.owner = req.user._id;
-  newListing.image = { url, filename };
+  newListing.image = { url: imageUrl, filename: imageFilename };
   newListing.geometry = response.body.features[0].geometry;
   let savedListing = await newListing.save();
+
+  // Image URL is already full URL if using Cloudinary, transform if local
+  const listingObj = savedListing.toObject();
+  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    listingObj.image.url = baseUrl + listingObj.image.url;
+  }
 
   // Return a success message and the new listing data.
   res.status(201).json({
@@ -96,26 +105,22 @@ module.exports.renderEditForm = async (req, res) => {
 // Updates a listing and returns the updated object as JSON.
 module.exports.updateListing = async (req, res) => {
   let { id } = req.params;
-  let listing = await Listing.findById(id);
+  let listing = await Listing.findByIdAndUpdate(id, { ...req.body.listing });
 
-  if (!listing) {
-    return res.status(404).json({ error: "Listing not found" });
-  }
-
-  // If a new image is uploaded, delete the old image from Cloudinary
-  if (req.file && listing.image && listing.image.filename) {
-    try {
-      // Delete old image from Cloudinary using public_id
-      await cloudinary.uploader.destroy(listing.image.filename);
-    } catch (error) {
-      console.error("Error deleting old image from Cloudinary:", error);
-      // Continue with update even if deletion fails
+  if (req.file) {
+    // Handle image URL - Cloudinary provides full URL in path, local storage uses filename
+    let imageUrl, imageFilename;
+    if (req.file.path) {
+      // Cloudinary storage - path contains full URL
+      imageUrl = req.file.path;
+      imageFilename = req.file.filename || req.file.originalname;
+    } else {
+      // Local storage - construct relative URL
+      imageFilename = req.file.filename;
+      imageUrl = `/uploads/${imageFilename}`;
     }
-    
-    // Update with new image from Cloudinary
-    const url = req.file.path || req.file.secure_url; // Cloudinary URL (full URL)
-    const filename = req.file.filename || req.file.public_id; // Cloudinary public_id (includes folder if specified)
-    listing.image = { url, filename };
+    listing.image = { url: imageUrl, filename: imageFilename };
+    await listing.save();
   }
 
   // Update other listing fields

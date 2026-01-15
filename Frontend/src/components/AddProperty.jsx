@@ -178,21 +178,23 @@ export default function AddProperty() {
         body: formDataToSend
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        setSubmitStatus('error');
+        setErrors({ submit: errorData.error || 'Failed to add property. Please try again.' });
+        return;
+      }
+
       const data = await response.json();
 
-      if (result.ok) {
-        setSubmitStatus('success');
-        // Reset form after successful submission
-        setFormData({
-          title: "", description: "", price: "", bedrooms: "", bathrooms: "",
-          area: "", location: "", type: "buy", 
-          propertyCategory: propertyCategories[mainCategory][0].value,
-          amenities: [], photos: []
-        });
-      } else {
-        setSubmitStatus('error');
-        setErrors({ submit: result.data?.error || 'Failed to add property. Please try again.' });
-      }
+      setSubmitStatus('success');
+      // Reset form after successful submission
+      setFormData({
+        title: "", description: "", price: "", bedrooms: "", bathrooms: "",
+        area: "", location: "", type: "buy", 
+        propertyCategory: propertyCategories[mainCategory][0].value,
+        amenities: [], photos: []
+      });
     } catch (error) {
       console.error('Error adding property:', error);
       setSubmitStatus('error');

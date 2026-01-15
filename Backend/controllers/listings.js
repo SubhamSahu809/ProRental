@@ -39,58 +39,83 @@ module.exports.showListing = async (req, res) => {
 // Create Listing (POST /api/listings)
 // Creates a new listing and returns the created object or a success message as JSON.
 module.exports.createListing = async (req, res, next) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "Image file is required" });
-  }
-
-  let response = await geocodingClient
-    .forwardGeocode({
-      query: req.body.listing.location,
-      limit: 1,
-    })
-    .send();
-
-  // Handle image URL - Cloudinary provides full URL in path, local storage uses filename
-  let imageUrl, imageFilename;
-  if (req.file.path) {
-    // Cloudinary storage - path contains full URL
-    imageUrl = req.file.path;
-    imageFilename = req.file.filename || req.file.originalname;
-  } else {
-    // Local storage - construct relative URL
-    imageFilename = req.file.filename;
-    imageUrl = `/uploads/${imageFilename}`;
-  }
-  
-  const listingData = { ...req.body.listing };
-  
-  // Parse amenities if it's a JSON string
-  if (listingData.amenities && typeof listingData.amenities === 'string') {
-    try {
-      listingData.amenities = JSON.parse(listingData.amenities);
-    } catch (e) {
-      listingData.amenities = [];
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Image file is required" });
     }
-  }
-  
-  const newListing = new Listing(listingData);
-  newListing.owner = req.user._id;
-  newListing.image = { url: imageUrl, filename: imageFilename };
-  newListing.geometry = response.body.features[0].geometry;
-  let savedListing = await newListing.save();
 
-  // Image URL is already full URL if using Cloudinary, transform if local
-  const listingObj = savedListing.toObject();
-  if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    listingObj.image.url = baseUrl + listingObj.image.url;
-  }
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
 
-  // Return a success message and the new listing data.
-  res.status(201).json({
-    message: "New Property Created!",
-    listing: savedListing,
-  });
+    // Handle geocoding - make it optional in case of API failures
+    let geometry = null;
+    if (mapToken && req.body.listing && req.body.listing.location) {
+      try {
+        let geocodeResponse = await geocodingClient
+          .forwardGeocode({
+            query: req.body.listing.location,
+            limit: 1,
+          })
+          .send();
+        
+        if (geocodeResponse.body && geocodeResponse.body.features && geocodeResponse.body.features.length > 0) {
+          geometry = geocodeResponse.body.features[0].geometry;
+        }
+      } catch (geocodeError) {
+        console.error('Geocoding error (continuing without geometry):', geocodeError);
+        // Continue without geometry if geocoding fails
+      }
+    }
+
+    // Handle image URL - Cloudinary provides full URL in path, local storage uses filename
+    let imageUrl, imageFilename;
+    if (req.file.path) {
+      // Cloudinary storage - path contains full URL
+      imageUrl = req.file.path;
+      imageFilename = req.file.filename || req.file.originalname;
+    } else {
+      // Local storage - construct relative URL
+      imageFilename = req.file.filename;
+      imageUrl = `/uploads/${imageFilename}`;
+    }
+    
+    const listingData = { ...req.body.listing };
+    
+    // Parse amenities if it's a JSON string
+    if (listingData.amenities && typeof listingData.amenities === 'string') {
+      try {
+        listingData.amenities = JSON.parse(listingData.amenities);
+      } catch (e) {
+        listingData.amenities = [];
+      }
+    }
+    
+    const newListing = new Listing(listingData);
+    newListing.owner = req.user._id;
+    newListing.image = { url: imageUrl, filename: imageFilename };
+    if (geometry) {
+      newListing.geometry = geometry;
+    }
+    
+    let savedListing = await newListing.save();
+
+    // Image URL is already full URL if using Cloudinary, transform if local
+    const listingObj = savedListing.toObject();
+    if (listingObj.image && listingObj.image.url && !listingObj.image.url.startsWith('http')) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      listingObj.image.url = baseUrl + listingObj.image.url;
+    }
+
+    // Return a success message and the new listing data.
+    res.status(201).json({
+      message: "New Property Created!",
+      listing: savedListing,
+    });
+  } catch (error) {
+    console.error('Error creating listing:', error);
+    res.status(500).json({ error: error.message || "Failed to create listing" });
+  }
 };
 
 // Get Listing for Edit (GET /api/listings/:id/edit)

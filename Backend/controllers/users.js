@@ -59,16 +59,21 @@ module.exports.logout = (req, res, next) => {
 // getCurrentUser (GET)
 // Returns the current logged-in user information.
 module.exports.getCurrentUser = (req, res) => {
-    if (req.isAuthenticated() && req.user) {
-        res.status(200).json({
-            user: {
-                id: req.user._id,
-                firstName: req.user.firstName,
-                lastName: req.user.lastName,
-                email: req.user.email
-            }
-        });
-    } else {
-        res.status(401).json({ error: "Not authenticated" });
+    try {
+        if (req.isAuthenticated() && req.user) {
+            res.status(200).json({
+                user: {
+                    id: req.user._id,
+                    firstName: req.user.firstName,
+                    lastName: req.user.lastName,
+                    email: req.user.email
+                }
+            });
+        } else {
+            res.status(401).json({ error: "Not authenticated" });
+        }
+    } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+        res.status(500).json({ error: "Failed to get user information" });
     }
 };

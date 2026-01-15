@@ -6,9 +6,14 @@ const { cloudinary } = require("../cloudConfig.js");
 
 // All Listings (GET /api/listings)
 // Returns all listings as a JSON array.
-module.exports.index = async (req, res) => {
-  const allListings = await Listing.find({});
-  res.json(allListings);
+module.exports.index = async (req, res, next) => {
+  try {
+    const allListings = await Listing.find({});
+    res.json(allListings);
+  } catch (error) {
+    console.error('Error fetching listings:', error);
+    res.status(500).json({ error: "Failed to fetch listings" });
+  }
 };
 
 // Show Listing (GET /api/listings/:id)

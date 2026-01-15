@@ -33,7 +33,13 @@ function MyProperties() {
       
       if (response.ok) {
         const data = await response.json();
-        setProperties(data);
+        // Ensure data is an array before setting
+        if (Array.isArray(data)) {
+          setProperties(data);
+        } else {
+          console.error("Expected array but got:", data);
+          setProperties([]);
+        }
       } else {
         throw new Error('Failed to load properties');
       }

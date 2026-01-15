@@ -19,7 +19,19 @@ function Proporties() {
       const response = await fetch(`${API_URL}/api/listings`, {
         credentials: 'include'
       })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch properties: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json()
+      
+      // Ensure data is an array before mapping
+      if (!Array.isArray(data)) {
+        console.error("Expected array but got:", data);
+        setProperties([]);
+        return;
+      }
       
       // Transform backend data to match frontend format
       const transformedProperties = data.map((listing) => ({

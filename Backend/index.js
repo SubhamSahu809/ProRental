@@ -56,7 +56,7 @@ if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
 // ==============================
 // CORS Configuration
 // ==============================
-const allowedOrigins = (process.env.CORS_ORIGINS || "")
+const allowedOrigins = (process.env.CLIENT_URL || "")
     .split(",")
     .map(origin => origin.trim())
     .filter(Boolean);

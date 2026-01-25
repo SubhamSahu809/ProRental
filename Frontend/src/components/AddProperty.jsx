@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Upload, Home, Bath, BedDouble, MapPin, DollarSign, ImagePlus, X, Check, AlertCircle, Building, TreePine, Store } from "lucide-react";
+import { apiUrl } from "../utils/api";
 
 export default function AddProperty() {
   const [mainCategory, setMainCategory] = useState('residential');
@@ -165,21 +166,43 @@ export default function AddProperty() {
       formDataToSend.append('listing[propertyCategory]', formData.propertyCategory);
       formDataToSend.append('listing[amenities]', JSON.stringify(formData.amenities));
       
-      // Add the first photo as the main image
+      // Add all photos (1-8 images) to the form data
+      // The field name should match what the backend expects: "listing[images]"
       if (formData.photos.length > 0) {
-        formDataToSend.append('listing[image]', formData.photos[0]);
+        formData.photos.forEach((photo, index) => {
+          formDataToSend.append('listing[images]', photo);
+        });
+        console.log(`Sending ${formData.photos.length} image(s) to backend`);
       }
 
       // Send to backend API
-      const response = await fetch('http://localhost:8080/api/listings', {
+      const response = await fetch(apiUrl("/api/listings"), {
         method: 'POST',
         credentials: 'include', // Important for session cookies
         body: formDataToSend
       });
 
+      // Check if response is ok before trying to parse JSON
+      if (!response.ok) {
+        // Try to parse error message from response
+        let errorMessage = 'Failed to add property. Please try again.';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          // If we can't parse JSON, use default message
+          console.error('Could not parse error response:', parseError);
+        }
+        setSubmitStatus('error');
+        setErrors({ submit: errorMessage });
+        console.error('Error adding property - Server response:', response.status, errorMessage);
+        return; // Exit early to prevent marking as successful
+      }
+
+      // Parse successful response
       const data = await response.json();
 
-      if (response.ok) {
+      if (data.message && data.listing) {
         setSubmitStatus('success');
         // Reset form after successful submission
         setFormData({
@@ -188,14 +211,24 @@ export default function AddProperty() {
           propertyCategory: propertyCategories[mainCategory][0].value,
           amenities: [], photos: []
         });
+        console.log('Property added successfully:', data.listing);
       } else {
+        // Unexpected response format
         setSubmitStatus('error');
-        setErrors({ submit: data.error || 'Failed to add property. Please try again.' });
+        setErrors({ submit: 'Unexpected response from server. Please try again.' });
+        console.error('Unexpected response format:', data);
       }
     } catch (error) {
+      // Network error or connection reset
       console.error('Error adding property:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       setSubmitStatus('error');
-      setErrors({ submit: 'Network error. Please check your connection.' });
+      setErrors({ submit: 'Network error please check your connection' });
+      // Ensure property is NOT marked as successfully listed
     } finally {
       setIsSubmitting(false);
     }

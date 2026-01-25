@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Home, Edit, Trash2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { apiUrl } from "../utils/api";
 
 function MyProperties() {
   const [properties, setProperties] = useState([]);
@@ -15,7 +16,7 @@ function MyProperties() {
 
   const fetchMyProperties = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/listings/owner/properties', {
+      const response = await fetch(apiUrl("/api/listings/owner/properties"), {
         credentials: 'include',
         headers: {
           'Accept': 'application/json',
@@ -51,7 +52,7 @@ function MyProperties() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8080/api/listings/${id}`, {
+      const response = await fetch(apiUrl(`/api/listings/${id}`), {
         method: 'DELETE',
         credentials: 'include'
       });

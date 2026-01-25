@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { X } from "lucide-react";
+import { apiUrl } from "../utils/api";
 
 const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
   const [formData, setFormData] = useState({
@@ -24,7 +25,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:8080/users/login", {
+      const response = await fetch(apiUrl("/users/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -49,7 +50,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
       }
     } catch (err) {
       if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
-        setError("Network error. Please check your connection and ensure the backend server is running on port 8080.");
+        setError("Network error. Please check your connection and ensure the backend server is reachable.");
       } else {
         setError(err.message || "An unexpected error occurred. Please try again.");
       }

@@ -3,7 +3,7 @@ const router = express.Router();
 const wrapAsync = require("../utils/wrapAsync.js");
 const { isLoggedIn, isOwner, validateListing } = require("../middleware.js");
 const listingController = require("../controllers/listings.js");
-const { upload } = require("../cloudConfig.js");
+const { uploadArray, uploadSingle, handleMulterError } = require("../cloudConfig.js");
 
 // All Listing Route: Fetches all listings and returns them as JSON.
 router.get("/", wrapAsync(listingController.index));
@@ -24,7 +24,7 @@ router.get("/:id", wrapAsync(listingController.showListing));
 router.post(
   "/",
   isLoggedIn,
-  upload.single("listing[image]"),
+  uploadArray("listing[images]", 8), // Handle 1-8 images with error handling
   validateListing,
   wrapAsync(listingController.createListing)
 );
@@ -37,7 +37,7 @@ router.put(
   "/:id",
   isLoggedIn,
   isOwner,
-  upload.single("listing[image]"),
+  uploadSingle("listing[image]"), // Wrapped upload with error handling
   validateListing,
   wrapAsync(listingController.updateListing)
 );

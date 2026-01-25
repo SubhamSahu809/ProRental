@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Heart, Camera, ChevronLeft, ChevronRight } from 'lucide-react'
+import { apiUrl } from "../utils/api"
 
 const Property = () => {
   const { id } = useParams()
@@ -18,7 +19,7 @@ const Property = () => {
   const fetchProperty = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`http://localhost:8080/api/listings/${id}`, {
+      const response = await fetch(apiUrl(`/api/listings/${id}`), {
         credentials: 'include'
       })
       

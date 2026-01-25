@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowUpRight, Menu, X, User, LogOut, Home, ChevronDown } from "lucide-react";
 import LoginModal from "./LoginModal";
 import SignupModal from "./SignupModal";
+import { apiUrl } from "../utils/api";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -54,7 +55,7 @@ const Navbar = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch("http://localhost:8080/users/me", {
+        const response = await fetch(apiUrl("/users/me"), {
           credentials: "include",
         });
         if (response.ok) {
@@ -113,7 +114,7 @@ const Navbar = () => {
     }
     setIsProfileDropdownOpen(false);
     try {
-      const response = await fetch("http://localhost:8080/users/logout", {
+      const response = await fetch(apiUrl("/users/logout"), {
         method: "GET",
         credentials: "include",
       });

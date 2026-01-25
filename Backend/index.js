@@ -1,117 +1,178 @@
-// index.js
+// ==============================
+// Environment Setup
+// ==============================
 if (process.env.NODE_ENV !== "production") {
     require("dotenv").config();
 }
 
+// ==============================
+// Imports
+// ==============================
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
-const path = require("path");
 const methodOverride = require("method-override");
-const ExpressError = require("./utils/ExpressError.js");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const passport = require("passport");
-const localStrategy = require("passport-local");
-const User = require("./models/user.js");
-const cors = require("cors"); // New: Import cors middleware
+const LocalStrategy = require("passport-local");
+const cors = require("cors");
 
-const listingsRouter = require("./routes/listing.js");
-const reviewsRouter = require("./routes/review.js");
-const userRouter = require("./routes/user.js");
+const ExpressError = require("./utils/ExpressError");
+const User = require("./models/user");
 
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Routes
+const listingsRouter = require("./routes/listing");
+const reviewsRouter = require("./routes/review");
+const userRouter = require("./routes/user");
 
+// ==============================
+// App Initialization
+// ==============================
+const app = express();
+app.set("trust proxy", 1); // Required for secure cookies behind Render/Vercel/etc
 
-const allowedOrigins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-];
+// ==============================
+// Environment Validation
+// ==============================
+const DB_URL = process.env.ATLAS_DB_URL;
+const SESSION_SECRET = process.env.SECRET;
+
+if (!DB_URL) throw new Error("Missing required env var: ATLAS_DB_URL");
+if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
+
+// ==============================
+// Database Connection
+// ==============================
+(async function connectDB() {
+    try {
+        await mongoose.connect(DB_URL);
+        console.log("Connected to Database");
+    } catch (err) {
+        console.error("MongoDB connection error:", err);
+        process.exit(1);
+    }
+})();
+
+// ==============================
+// CORS Configuration
+// ==============================
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
 const corsOptions = {
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+    origin: (origin, callback) => {
+        // Allow non-browser requests (Postman, curl, server-to-server)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
+
         return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
 };
+
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-app.use(express.urlencoded({extended: true}));
+
+// ==============================
+// Middleware
+// ==============================
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(methodOverride("_method"));
-app.use(express.json()); 
 
-const DB_URL = process.env.ATLAS_DB_URL;
-
-main().then(() => {
-    console.log("Connected to DataBase");
-})
-.catch((err) => {
-    console.log(err);
-});
-
-async function main() {
-    await mongoose.connect(DB_URL);
-}
-
+// ==============================
+// Session Store
+// ==============================
 const store = MongoStore.create({
     mongoUrl: DB_URL,
-    crypto: {
-        secret: process.env.SECRET,
-    },
-    touchAfter: 24 * 60 * 60,
+    crypto: { secret: SESSION_SECRET },
+    touchAfter: 24 * 60 * 60, // 1 day
 });
 
-store.on("error", (e) => {
-    console.log("Session Store Error", e);
+store.on("error", (err) => {
+    console.error("Session Store Error:", err);
 });
 
-const sessionOptions = {
-    store,
-    secret: process.env.SECRET,
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        httpOnly: true, 
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        secure: process.env.NODE_ENV === "production",
-    },
-};
+app.use(
+    session({
+        store,
+        secret: SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            httpOnly: true,
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: process.env.NODE_ENV === "production",
+        },
+    })
+);
 
-app.use(session(sessionOptions));
-
+// ==============================
+// Passport Configuration
+// ==============================
 app.use(passport.initialize());
 app.use(passport.session());
-passport.use(new localStrategy({
-    usernameField: 'email' // Use email instead of username
-}, User.authenticate()));
+
+passport.use(
+    new LocalStrategy(
+        { usernameField: "email" },
+        User.authenticate()
+    )
+);
 
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
-
-
+// ==============================
+// Routes
+// ==============================
 app.get("/", (req, res) => {
     res.json({ message: "Welcome to the Wanderlust API!" });
 });
 
-// Use API-specific route prefixes
 app.use("/api/listings/:id/reviews", reviewsRouter);
-app.use("/api/users", userRouter);
-app.use("/users", userRouter); // Also mount at /users for frontend compatibility
 app.use("/api/listings", listingsRouter);
+app.use("/api/users", userRouter);
+app.use("/users", userRouter); // Frontend compatibility
 
-
-// Error handling middleware
+// ==============================
+// Global Error Handler
+// ==============================
 app.use((err, req, res, next) => {
-    let { statusCode = 500, message = "Something went wrong!" } = err;
+    console.error("Global error handler:", {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+        statusCode: err.statusCode,
+    });
+
+    let statusCode = err.statusCode || 500;
+    let message = err.message || "Something went wrong!";
+
+    if (err.name === "ValidationError") {
+        statusCode = 400;
+    } else if (err.name === "CastError") {
+        statusCode = 400;
+        message = "Invalid data format";
+    } else if (err.message?.includes("Cloudinary")) {
+        statusCode = 500;
+        message = "Image upload failed. Check Cloudinary configuration.";
+    }
+
     res.status(statusCode).json({ error: message });
 });
 
-app.listen(8080, () => {
-    console.log("server is listening to port 8080");
+// ==============================
+// Server
+// ==============================
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });

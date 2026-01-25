@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiUrl } from "../utils/api"
 
 function Proporties() {
   const [propertyType, setPropertyType] = useState('buy')
@@ -13,7 +14,7 @@ function Proporties() {
 
   const fetchProperties = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/listings', {
+      const response = await fetch(apiUrl("/api/listings"), {
         credentials: 'include'
       })
       const data = await response.json()

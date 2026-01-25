@@ -14,7 +14,11 @@ const listingSchema = new Schema({
     image: {
         filename: String,
         url: String,
-    },
+    }, // Main/primary image (first image) - kept for backward compatibility
+    images: [{
+        filename: String,
+        url: String,
+    }], // Array of all property images (1-8 images)
     price: Number,
     location: String,
     country: String,

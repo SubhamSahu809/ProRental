@@ -52,13 +52,25 @@ function MyProperties() {
     }
 
     try {
-      const response = await fetch(apiUrl(`/api/listings/${id}`), {
-        method: 'DELETE',
-        credentials: 'include'
+      // Use POST + method override to avoid CORS preflight issues with DELETE.
+      // Backend has method-override("_method") enabled, so this will still hit
+      // the DELETE /api/listings/:id route on the server.
+      const response = await fetch(apiUrl(`/api/listings/${id}?_method=DELETE`), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          // Use a "simple" content type to avoid triggering a CORS preflight.
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: '', // no body needed; _method is in the query string
       });
 
       if (response.ok) {
         setProperties(properties.filter(prop => prop._id !== id));
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete property:', response.status, errorData);
       }
     } catch (error) {
       console.error('Error deleting property:', error);

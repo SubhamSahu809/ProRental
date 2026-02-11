@@ -30,7 +30,6 @@ module.exports.signup = async (req, res, next) => {
     }
 };
 
-// Render Login Form (GET) is not needed in a pure API.
 
 // login (POST)
 // Handles user login and returns a JSON response with user info.

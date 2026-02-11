@@ -56,10 +56,22 @@ if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
 // ==============================
 // CORS Configuration
 // ==============================
-const allowedOrigins = (process.env.CLIENT_URL || "")
+// Default allowed origins so the app "just works" in common setups,
+// even if CLIENT_URL is not configured correctly in the environment.
+const defaultAllowedOrigins = [
+    "http://localhost:5173",          // Vite dev server
+    "http://localhost:3000",          // Common React dev port
+    "http://localhost:8080",          // Fallback local backend
+    "https://prorental.vercel.app",   // Production frontend on Vercel
+];
+
+const envAllowedOrigins = (process.env.CLIENT_URL || "")
     .split(",")
-    .map(origin => origin.trim())
+    .map((origin) => origin.trim())
     .filter(Boolean);
+
+// Merge env + defaults, removing duplicates
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
 
 const corsOptions = {
     origin: (origin, callback) => {
@@ -70,6 +82,7 @@ const corsOptions = {
             return callback(null, true);
         }
 
+        console.warn("Blocked by CORS. Origin not allowed:", origin);
         return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,

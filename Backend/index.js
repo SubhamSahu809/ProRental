@@ -56,36 +56,12 @@ if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
 // ==============================
 // CORS Configuration
 // ==============================
-// Default allowed origins so the app "just works" in common setups,
-// even if CLIENT_URL is not configured correctly in the environment.
-const defaultAllowedOrigins = [
-    "http://localhost:5173",          // Vite dev server
-    "http://localhost:3000",          // Common React dev port
-    "http://localhost:8080",          // Fallback local backend
-    "https://prorental.vercel.app",   // Production frontend on Vercel
-];
-
-const envAllowedOrigins = (process.env.CLIENT_URL || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-// Merge env + defaults, removing duplicates
-const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
-
+// Simplified, permissive CORS so that any browser origin
+// (including https://prorental.vercel.app and local dev)
+// can talk to this API. This avoids deployment/env var issues.
 const corsOptions = {
-    origin: (origin, callback) => {
-        // Allow non-browser requests (Postman, curl, server-to-server)
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-
-        console.warn("Blocked by CORS. Origin not allowed:", origin);
-        return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
+    origin: true,        // Reflects the request Origin header
+    credentials: true,   // Allow cookies/credentials
 };
 
 app.use(cors(corsOptions));

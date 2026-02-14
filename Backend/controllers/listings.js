@@ -1,7 +1,8 @@
 const Listing = require("../models/listing");
-const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
-const mapToken = process.env.MAP_TOKEN;
-const geocodingClient = mbxGeocoding({ accessToken: mapToken });
+// Geocoding disabled temporarily due to API issues
+// const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
+// const mapToken = process.env.MAP_TOKEN;
+// const geocodingClient = mbxGeocoding({ accessToken: mapToken });
 
 // All Listings (GET /api/listings)
 // Returns all listings as a JSON array.
@@ -58,26 +59,24 @@ module.exports.createListing = async (req, res, next) => {
       return res.status(400).json({ error: "Location is required" });
     }
 
-    // Geocode the location
-    let response;
-    try {
-      response = await geocodingClient
-        .forwardGeocode({
-          query: req.body.listing.location,
-          limit: 1,
-        })
-        .send();
-    } catch (geocodeError) {
-      console.error('Geocoding error:', geocodeError);
-      return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
-    }
+    // Geocoding disabled temporarily due to API issues
+    // let response;
+    // try {
+    //   response = await geocodingClient
+    //     .forwardGeocode({
+    //       query: req.body.listing.location,
+    //       limit: 1,
+    //     })
+    //     .send();
+    // } catch (geocodeError) {
+    //   console.error('Geocoding error:', geocodeError);
+    //   return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
+    // }
+    // if (!response.body || !response.body.features || response.body.features.length === 0) {
+    //   return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
+    // }
 
-    // Check if geocoding returned results
-    if (!response.body || !response.body.features || response.body.features.length === 0) {
-      return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
-    }
-
-    // Process all uploaded imagesx
+    // Process all uploaded images
     const images = [];
     for (const file of req.files) {
       // Validate Cloudinary upload was successful for each file
@@ -119,7 +118,9 @@ module.exports.createListing = async (req, res, next) => {
     newListing.owner = req.user._id;
     newListing.image = mainImage; // Main image (first image) for backward compatibility
     newListing.images = images; // All images array (1-8 images)
-    newListing.geometry = response.body.features[0].geometry;
+    // Geocoding disabled: use default geometry (required by schema)
+    // newListing.geometry = response.body.features[0].geometry;
+    newListing.geometry = { type: "Point", coordinates: [0, 0] };
     let savedListing = await newListing.save();
 
     console.log(`Successfully created listing with ${images.length} image(s)`);

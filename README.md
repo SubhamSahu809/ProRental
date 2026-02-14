@@ -93,7 +93,3 @@ proRental is a full‑stack rental property platform with:
   - `npm run preview` – preview the production build.
   - `npm run lint` – run ESLint for the frontend.
 
-### License
-
-This project is licensed under the **ISC** license (as configured in the backend `package.json`).
-

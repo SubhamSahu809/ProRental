@@ -17,6 +17,7 @@ module.exports.listingSchema = Joi.object({
             Joi.array().items(Joi.string()),
             Joi.string()
         ).allow(null, ""),
+        keepImages: Joi.array().items(Joi.string()).optional(),
     }).required(),
 });
 

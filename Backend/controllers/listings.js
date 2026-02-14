@@ -151,38 +151,63 @@ module.exports.renderEditForm = async (req, res) => {
 
 // Update Listing (PUT /api/listings/:id)
 // Updates a listing and returns the updated object as JSON.
+// Supports: keepImages (array of existing image URLs to keep) + new uploads (listing[images]).
+// Final images = kept + new; at least 1 image required. Removed images are deleted from Cloudinary.
 module.exports.updateListing = async (req, res) => {
-  let { id } = req.params;
-  let listing = await Listing.findById(id);
+  const { id } = req.params;
+  const listing = await Listing.findById(id);
+  const cloudinary = require("../cloudConfig").cloudinary;
 
   if (!listing) {
     return res.status(404).json({ error: "Property does not exist!" });
   }
 
-  // Update listing data
-  Object.assign(listing, req.body.listing);
+  // Existing images: prefer listing.images array, fallback to single listing.image
+  const existingImages = Array.isArray(listing.images) && listing.images.length > 0
+    ? listing.images
+    : listing.image && listing.image.url
+      ? [{ url: listing.image.url, filename: listing.image.filename }]
+      : [];
 
-  // If a new image is uploaded, update the image URL and public_id
-  if (req.file) {
-    // Delete old image from Cloudinary if it exists
-    if (listing.image && listing.image.filename) {
-      const cloudinary = require('../cloudConfig').cloudinary;
-      try {
-        await cloudinary.uploader.destroy(listing.image.filename);
-      } catch (error) {
-        console.error('Error deleting old image from Cloudinary:', error);
-      }
-    }
-    // Set new image URL and public_id from Cloudinary
-    listing.image = {
-      url: req.file.path, // Cloudinary URL
-      filename: req.file.filename // Cloudinary public_id
-    };
+  const keepUrls = Array.isArray(req.body.listing?.keepImages)
+    ? req.body.listing.keepImages
+    : [];
+
+  const keptImages = existingImages.filter((img) => img && img.url && keepUrls.includes(img.url));
+  const newFiles = req.files || [];
+  const newImages = newFiles
+    .filter((f) => f && f.path)
+    .map((f) => ({ url: f.path, filename: f.filename || f.public_id }));
+
+  const finalImages = [...keptImages, ...newImages];
+
+  if (finalImages.length === 0) {
+    return res.status(400).json({ error: "At least one image is required. Keep existing or add new images." });
   }
-  
+
+  // Delete from Cloudinary any existing image that was not kept
+  for (const img of existingImages) {
+    if (!img.filename) continue;
+    if (keepUrls.includes(img.url)) continue;
+    try {
+      await cloudinary.uploader.destroy(img.filename);
+    } catch (err) {
+      console.error("Error deleting old image from Cloudinary:", err);
+    }
+  }
+
+  listing.image = finalImages[0];
+  listing.images = finalImages;
+
+  // Update other listing fields (avoid overwriting with keepImages)
+  const bodyListing = { ...req.body.listing };
+  delete bodyListing.keepImages;
+  delete bodyListing.image;
+  delete bodyListing.images;
+  Object.assign(listing, bodyListing);
+
   await listing.save();
-  
-  // Return a success message and the updated listing data.
+
   res.json({ message: "Property Details Updated!", listing: listing.toObject() });
 };
 

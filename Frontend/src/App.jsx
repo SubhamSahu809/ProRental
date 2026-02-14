@@ -5,6 +5,7 @@ import AddPropertyPage from "./pages/AddProperty.jsx";
 import LoginPage from "./pages/Login.jsx";
 import Property from "./components/Property.jsx";
 import MyProperties from "./pages/MyProperties.jsx";
+import EditPropertyPage from "./pages/EditProperty.jsx";
 import "./App.css";
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
         <Route path="/add-property" element={<AddPropertyPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/property/:id" element={<Property />} />
+        <Route path="/property/:id/edit" element={<EditPropertyPage />} />
         <Route path="/my-properties" element={<MyProperties />} />
       </Routes>
     </>

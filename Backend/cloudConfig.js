@@ -131,7 +131,7 @@ const uploadSingle = (fieldName) => {
 };
 
 // Wrapper function to handle multiple file uploads (array) with error handling
-// Supports 1-8 images
+// Supports 1-8 images (requires at least 1)
 const uploadArray = (fieldName, maxCount = 8) => {
     const uploadMiddleware = upload.array(fieldName, maxCount);
     
@@ -152,6 +152,25 @@ const uploadArray = (fieldName, maxCount = 8) => {
             }
             
             console.log(`Successfully received ${req.files.length} image(s) for upload`);
+            next();
+        });
+    };
+};
+
+// Optional multiple file uploads (0 to maxCount) - for edit/update when keeping existing images
+const uploadArrayOptional = (fieldName, maxCount = 8) => {
+    const uploadMiddleware = upload.array(fieldName, maxCount);
+    
+    return (req, res, next) => {
+        uploadMiddleware(req, res, (err) => {
+            if (err) {
+                return handleUploadError(err, res);
+            }
+            req.files = req.files || [];
+            if (req.files.length > maxCount) {
+                return res.status(400).json({ error: `Too many images. Maximum ${maxCount} images allowed.` });
+            }
+            console.log(`Received ${req.files.length} new image(s) for update`);
             next();
         });
     };
@@ -192,7 +211,8 @@ module.exports = {
     storage,
     upload,
     cloudinary,
-    uploadSingle, // Use this for single file uploads
-    uploadArray,  // Use this for multiple file uploads (1-8 images)
+    uploadSingle,         // Use this for single file uploads
+    uploadArray,          // Use this for multiple file uploads (1-8 images, requires at least 1)
+    uploadArrayOptional,  // Use for update: 0-8 new images (can combine with kept existing)
     handleMulterError
-}
+};

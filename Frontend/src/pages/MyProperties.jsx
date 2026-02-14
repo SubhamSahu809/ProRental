@@ -55,8 +55,8 @@ function MyProperties() {
       // Use POST + method override to avoid CORS preflight issues with DELETE.
       // Backend has method-override("_method") enabled, so this will still hit
       // the DELETE /api/listings/:id route on the server.
-      const response = await fetch(apiUrl(`/api/listings/${id}?_method=DELETE`), {
-        method: 'POST',
+      const response = await fetch(apiUrl(`/api/listings/${id}`), {
+        method: 'DELETE',
         credentials: 'include',
         headers: {
           // Use a "simple" content type to avoid triggering a CORS preflight.

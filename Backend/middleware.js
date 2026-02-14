@@ -20,14 +20,29 @@ module.exports.saveRedirectUrl = (req, res, next) => {
 }
 
 module.exports.isOwner = async(req, res, next) => {
-    let { id } = req.params;
-    let listing = await Listing.findById(id);
+    try {
+        const { id } = req.params;
+        const listing = await Listing.findById(id);
 
-    if (!listing.owner._id.equals(res.locals.currUser._id)){
-        req.flash("error", "You are not the owner of this property.");
-        return res.redirect(`/listings/${id}`);
+        // Listing not found
+        if (!listing) {
+            return res.status(404).json({ error: "Property does not exist!" });
+        }
+
+        // Not authenticated (defensive, isLoggedIn should run before this)
+        if (!req.isAuthenticated() || !req.user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        // Owner field missing or does not match current user
+        if (!listing.owner || !listing.owner.equals(req.user._id)) {
+            return res.status(403).json({ error: "You are not the owner of this property." });
+        }
+
+        next();
+    } catch (err) {
+        next(err);
     }
-    next();
 }
 
 module.exports.validateListing = (req, res, next) => {
@@ -58,11 +73,24 @@ module.exports.validateReview = (req, res, next) => {
 }
 
 module.exports.isReviewAuthor = async(req, res, next) => {
-    let { id, reviewId } = req.params;
-    let review = await Review.findById(reviewId);
-    if (!review.author.equals(res.locals.currUser._id)){
-        req.flash("error", "You are not the owner of this property.");
-        return res.redirect(`/listings/${id}`);
+    try {
+        const { id, reviewId } = req.params;
+        const review = await Review.findById(reviewId);
+
+        if (!review) {
+            return res.status(404).json({ error: "Review does not exist!" });
+        }
+
+        if (!req.isAuthenticated() || !req.user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        if (!review.author || !review.author.equals(req.user._id)) {
+            return res.status(403).json({ error: "You are not the author of this review." });
+        }
+
+        next();
+    } catch (err) {
+        next(err);
     }
-    next();
 }

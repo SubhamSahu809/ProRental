@@ -135,10 +135,13 @@ app.use("/users", userRouter); // Frontend compatibility
 // Global Error Handler
 // ==============================
 app.use((err, req, res, next) => {
+    if (res.headersSent) {
+        return next(err);
+    }
+
     console.error("Global error handler:", {
         name: err.name,
         message: err.message,
-        stack: err.stack,
         statusCode: err.statusCode,
     });
 

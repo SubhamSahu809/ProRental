@@ -69,13 +69,13 @@ module.exports.createListing = async (req, res, next) => {
         .send();
     } catch (geocodeError) {
       console.error('Geocoding error:', geocodeError);
-      return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
+      // return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
     }
 
-    // Check if geocoding returned results
-    if (!response.body || !response.body.features || response.body.features.length === 0) {
-      return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
-    }
+    // // Check if geocoding returned results
+    // if (!response.body || !response.body.features || response.body.features.length === 0) {
+    //   return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
+    // }
 
     // Process all uploaded images
     const images = [];
@@ -153,62 +153,66 @@ module.exports.renderEditForm = async (req, res) => {
 // Updates a listing and returns the updated object as JSON.
 // Supports: keepImages (array of existing image URLs to keep) + new uploads (listing[images]).
 // Final images = kept + new; at least 1 image required. Removed images are deleted from Cloudinary.
-module.exports.updateListing = async (req, res) => {
-  const { id } = req.params;
-  const listing = await Listing.findById(id);
-  const cloudinary = require("../cloudConfig").cloudinary;
+module.exports.updateListing = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const listing = await Listing.findById(id);
+    const cloudinary = require("../cloudConfig").cloudinary;
 
-  if (!listing) {
-    return res.status(404).json({ error: "Property does not exist!" });
-  }
+    if (!listing) {
+      return res.status(404).json({ error: "Property does not exist!" });
+    }
 
-  // Existing images: prefer listing.images array, fallback to single listing.image
-  const existingImages = Array.isArray(listing.images) && listing.images.length > 0
-    ? listing.images
-    : listing.image && listing.image.url
-      ? [{ url: listing.image.url, filename: listing.image.filename }]
+    // Existing images: prefer listing.images array, fallback to single listing.image
+    const existingImages = Array.isArray(listing.images) && listing.images.length > 0
+      ? listing.images
+      : listing.image && listing.image.url
+        ? [{ url: listing.image.url, filename: listing.image.filename }]
+        : [];
+
+    const keepUrls = Array.isArray(req.body?.listing?.keepImages)
+      ? req.body.listing.keepImages
       : [];
 
-  const keepUrls = Array.isArray(req.body.listing?.keepImages)
-    ? req.body.listing.keepImages
-    : [];
+    const keptImages = existingImages.filter((img) => img && img.url && keepUrls.includes(img.url));
+    const newFiles = req.files || [];
+    const newImages = newFiles
+      .filter((f) => f && f.path)
+      .map((f) => ({ url: f.path, filename: f.filename || f.public_id }));
 
-  const keptImages = existingImages.filter((img) => img && img.url && keepUrls.includes(img.url));
-  const newFiles = req.files || [];
-  const newImages = newFiles
-    .filter((f) => f && f.path)
-    .map((f) => ({ url: f.path, filename: f.filename || f.public_id }));
+    const finalImages = [...keptImages, ...newImages];
 
-  const finalImages = [...keptImages, ...newImages];
-
-  if (finalImages.length === 0) {
-    return res.status(400).json({ error: "At least one image is required. Keep existing or add new images." });
-  }
-
-  // Delete from Cloudinary any existing image that was not kept
-  for (const img of existingImages) {
-    if (!img.filename) continue;
-    if (keepUrls.includes(img.url)) continue;
-    try {
-      await cloudinary.uploader.destroy(img.filename);
-    } catch (err) {
-      console.error("Error deleting old image from Cloudinary:", err);
+    if (finalImages.length === 0) {
+      return res.status(400).json({ error: "At least one image is required. Keep existing or add new images." });
     }
+
+    // Delete from Cloudinary any existing image that was not kept
+    for (const img of existingImages) {
+      if (!img.filename) continue;
+      if (keepUrls.includes(img.url)) continue;
+      try {
+        await cloudinary.uploader.destroy(img.filename);
+      } catch (err) {
+        console.error("Error deleting old image from Cloudinary:", err);
+      }
+    }
+
+    listing.image = finalImages[0];
+    listing.images = finalImages;
+
+    // Update other listing fields (avoid overwriting with keepImages)
+    const bodyListing = req.body?.listing ? { ...req.body.listing } : {};
+    delete bodyListing.keepImages;
+    delete bodyListing.image;
+    delete bodyListing.images;
+    Object.assign(listing, bodyListing);
+
+    await listing.save();
+
+    res.json({ message: "Property Details Updated!", listing: listing.toObject() });
+  } catch (err) {
+    next(err);
   }
-
-  listing.image = finalImages[0];
-  listing.images = finalImages;
-
-  // Update other listing fields (avoid overwriting with keepImages)
-  const bodyListing = { ...req.body.listing };
-  delete bodyListing.keepImages;
-  delete bodyListing.image;
-  delete bodyListing.images;
-  Object.assign(listing, bodyListing);
-
-  await listing.save();
-
-  res.json({ message: "Property Details Updated!", listing: listing.toObject() });
 };
 
 // Delete Listing (DELETE /api/listings/:id)

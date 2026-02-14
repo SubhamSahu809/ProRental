@@ -46,31 +46,36 @@ module.exports.isOwner = async(req, res, next) => {
 }
 
 module.exports.validateListing = (req, res, next) => {
-    if (req.body.listing && req.body.listing.price) {
-        req.body.listing.price = Number(req.body.listing.price); // Convert price to number
-    }
+    try {
+        if (req.body && req.body.listing && req.body.listing.price) {
+            req.body.listing.price = Number(req.body.listing.price); // Convert price to number
+        }
 
-    const { error } = listingSchema.validate(req.body);
-    if (error) {
-        const msg = error.details.map((el) => el.message).join(",");
-        console.log(error);
-        throw new ExpressError(400, msg);
+        const { error } = listingSchema.validate(req.body || {});
+        if (error) {
+            const msg = error.details.map((el) => el.message).join(", ");
+            console.error("Listing validation error:", msg);
+            return next(new ExpressError(400, msg));
+        }
+        next();
+    } catch (err) {
+        next(err);
     }
-    next();
 };
 
 module.exports.validateReview = (req, res, next) => {
-    let {error} = reviewSchema.validate(req.body);
-
-    if(error){
-        let errMsg = error.details.map((el) => el.message).join(",");
-        console.log(error);
-        throw new ExpressError(400, error);
-        
-    }else{
+    try {
+        const { error } = reviewSchema.validate(req.body || {});
+        if (error) {
+            const errMsg = error.details.map((el) => el.message).join(", ");
+            console.error("Review validation error:", errMsg);
+            return next(new ExpressError(400, errMsg));
+        }
         next();
+    } catch (err) {
+        next(err);
     }
-}
+};
 
 module.exports.isReviewAuthor = async(req, res, next) => {
     try {

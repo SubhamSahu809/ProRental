@@ -69,15 +69,15 @@ module.exports.createListing = async (req, res, next) => {
         .send();
     } catch (geocodeError) {
       console.error('Geocoding error:', geocodeError);
-      // return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
+      return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
     }
 
-    // // Check if geocoding returned results
-    // if (!response.body || !response.body.features || response.body.features.length === 0) {
-    //   return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
-    // }
+    // Check if geocoding returned results
+    if (!response.body || !response.body.features || response.body.features.length === 0) {
+      return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
+    }
 
-    // Process all uploaded images
+    // Process all uploaded imagesx
     const images = [];
     for (const file of req.files) {
       // Validate Cloudinary upload was successful for each file

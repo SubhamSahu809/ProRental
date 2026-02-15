@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Heart, Camera, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Heart, ChevronLeft, ChevronRight, X, Camera } from 'lucide-react'
 import { apiUrl } from "../utils/api"
+
+const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80'
 
 const Property = () => {
   const { id } = useParams()
@@ -11,10 +13,20 @@ const Property = () => {
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showGalleryModal, setShowGalleryModal] = useState(false)
 
   useEffect(() => {
     fetchProperty()
   }, [id])
+
+  // Auto-advance carousel every 10 seconds when multiple images
+  useEffect(() => {
+    if (!property || property.images.length <= 1) return
+    const id = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % property.images.length)
+    }, 10000)
+    return () => clearInterval(id)
+  }, [property])
 
   const fetchProperty = async () => {
     try {
@@ -29,7 +41,18 @@ const Property = () => {
       
       const data = await response.json()
       
-      // Transform backend data to component format
+      // Build images array: use data.images (1-8) if present, else fallback to single data.image
+      let imageUrls = []
+      if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+        imageUrls = data.images.map((img) => (typeof img === 'string' ? img : img?.url)).filter(Boolean)
+      }
+      if (imageUrls.length === 0 && data.image?.url) {
+        imageUrls = [data.image.url]
+      }
+      if (imageUrls.length === 0) {
+        imageUrls = [PLACEHOLDER_IMAGE]
+      }
+      
       const transformedProperty = {
         id: data._id,
         name: data.title,
@@ -41,16 +64,12 @@ const Property = () => {
         status: data.type === 'rent' ? 'For Rent' : 'For Sale',
         description: data.description || 'No description available.',
         amenities: data.amenities || [],
-        // Use the main image for all three slots if only one image exists
-        mainImage: data.image?.url || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
-        images: [
-          data.image?.url || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
-          data.image?.url || 'https://images.unsplash.com/photo-1460518451285-97b6aa326961?auto=format&fit=crop&w=1200&q=80',
-          data.image?.url || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80'
-        ]
+        mainImage: imageUrls[0],
+        images: imageUrls
       }
       
       setProperty(transformedProperty)
+      setCurrentImageIndex(0)
     } catch (err) {
       console.error('Error fetching property:', err)
       setError(err.message)
@@ -74,6 +93,20 @@ const Property = () => {
       setCurrentImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length)
     }
   }
+
+  const mainImageUrl = property?.images?.length
+    ? property.images[currentImageIndex]
+    : property?.mainImage || PLACEHOLDER_IMAGE
+
+  // Thumbnail grid: show other images (not current main), max 3 thumbnails. Only show right column when 3+ images.
+  const totalImages = property?.images?.length ?? 0
+  const otherIndices = property?.images && totalImages >= 3
+    ? property.images
+        .map((_, i) => i)
+        .filter((i) => i !== currentImageIndex)
+        .slice(0, 3)
+    : []
+  const showThumbnailColumn = totalImages >= 3
 
   if (loading) {
     return (
@@ -104,70 +137,135 @@ const Property = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Back Button */}
-      <div className="max-w-6xl mx-auto px-4 py-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
-        >
-          <ChevronLeft size={20} className="mr-1" />
-          Back to Properties
-        </button>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 pb-10">
-        {/* Photos Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-          {/* Big image on left (spans 2 cols) */}
-          <div className="relative lg:col-span-2">
-            <img
-              src={property.mainImage}
-              alt={property.name}
-              className="w-full h-[360px] lg:h-[560px] object-cover rounded-2xl border border-blue-200"
-            />
-
-            {/* Status Badge */}
-            <div className="absolute top-4 left-4">
-              <span className="bg-white/90 text-xs font-medium px-4 py-2 rounded-full shadow">
-                {property.status}
-              </span>
-            </div>
-
-            {/* Like Button */}
-            <div className="absolute top-4 right-4">
-              <button
-                onClick={handleLike}
-                className={`p-3 rounded-full shadow-lg transition-all ${
-                  isLiked ? 'bg-red-500 text-white' : 'bg-white/80 text-gray-700 hover:bg-white'
-                }`}
-              >
-                <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
-              </button>
-            </div>
-
-            {/* Show All Photos Button - bottom right */}
-            <div className="absolute bottom-4 right-4">
-              <button className="bg-white/90 hover:bg-white text-gray-700 px-4 py-2 rounded-full text-sm font-medium shadow-lg transition-all flex items-center gap-2">
-                <Camera size={16} />
-                Show All Photos ({property.mainImage ? 1 : 0})
-              </button>
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-10">
+        {/* Photos Section: main image left (60–70%), thumbnail grid right */}
+        <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 mb-8">
+          {/* Main image - left, ~65% width on large screens */}
+          <div className="relative w-full lg:w-[65%] flex-shrink-0">
+            <div className="relative w-full aspect-[4/3] lg:aspect-auto lg:h-[480px] rounded-2xl overflow-hidden bg-gray-100">
+              {/* Carousel images with crossfade transition */}
+              {property.images.map((url, idx) => (
+                <img
+                  key={idx}
+                  src={url}
+                  alt={`${property.name} ${idx + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${
+                    idx === currentImageIndex ? 'opacity-100 z-0' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                />
+              ))}
+              {/* Status Badge */}
+              <div className="absolute top-4 left-4">
+                <span className="bg-white/90 text-xs font-medium px-4 py-2 rounded-full shadow">
+                  {property.status}
+                </span>
+              </div>
+              {/* Like Button */}
+              <div className="absolute top-4 right-4">
+                <button
+                  onClick={handleLike}
+                  className={`p-3 rounded-full shadow-lg transition-all ${
+                    isLiked ? 'bg-red-500 text-white' : 'bg-white/80 text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  <Heart size={20} fill={isLiked ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+              {/* Show All Photos - bottom right of main image */}
+              <div className="absolute bottom-4 right-4">
+                <button
+                  onClick={() => setShowGalleryModal(true)}
+                  className="bg-white/90 hover:bg-white text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg transition-all flex items-center gap-2"
+                >
+                  <Camera size={18} />
+                  Show All Photos ({totalImages})
+                </button>
+              </div>
+              {/* Arrows when multiple images */}
+              {totalImages > 1 && (
+                <>
+                  <button
+                    onClick={prevImage}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg z-10"
+                    aria-label="Previous photo"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button
+                    onClick={nextImage}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 hover:bg-white shadow-lg z-10"
+                    aria-label="Next photo"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </>
+              )}
+              {/* Carousel indicators - dots at bottom center */}
+              {totalImages > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+                  {property.images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      aria-label={`Go to photo ${idx + 1}`}
+                      className={`rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-transparent ${
+                        idx === currentImageIndex
+                          ? 'w-8 h-2.5 bg-white shadow-md'
+                          : 'w-2.5 h-2.5 bg-white/60 hover:bg-white/80'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Two stacked images on right */}
-          <div className="grid grid-rows-2 gap-4">
-            <img
-              src={property.images[1]}
-              alt={`${property.name} view 2`}
-              className="w-full h-[178px] lg:h-[270px] object-cover rounded-2xl"
-            />
-            <img
-              src={property.images[2]}
-              alt={`${property.name} view 3`}
-              className="w-full h-[178px] lg:h-[270px] object-cover rounded-2xl"
-            />
-          </div>
+          
         </div>
+
+        {/* Gallery modal - Show all photos */}
+        {showGalleryModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setShowGalleryModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+                <span className="font-semibold text-gray-800">All photos ({totalImages})</span>
+                <button
+                  onClick={() => setShowGalleryModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
+                  aria-label="Close"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto max-h-[calc(90vh-56px)]">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {property.images.map((url, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setCurrentImageIndex(idx)
+                        setShowGalleryModal(false)
+                      }}
+                      className="rounded-xl overflow-hidden aspect-[4/3] bg-gray-100 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <img
+                        src={url}
+                        alt={`${property.name} ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Details below photos */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

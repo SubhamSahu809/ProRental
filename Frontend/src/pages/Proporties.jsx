@@ -116,12 +116,14 @@ function Proporties() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-base font-bold text-green-600">{property.price}</span>
-                  <button
-                    onClick={() => navigate(`/property/${property.id}`)}
-                    className="px-3 py-1 bg-black text-white rounded-full text-xs hover:bg-gray-800"
+                  <a
+                    href={`/property/${property.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1 bg-black text-white rounded-full text-xs hover:bg-gray-800 inline-block"
                   >
                     View Details
-                  </button>
+                  </a>
                 </div>
               </div>
             </div>

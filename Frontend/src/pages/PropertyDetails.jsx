@@ -34,16 +34,25 @@ function Gallery({ images, title }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 lg:h-[460px]">
-        <div className="relative lg:col-span-3 aspect-[4/3] lg:aspect-auto rounded-2xl overflow-hidden bg-gray-100">
+      {/* grid-rows-1 = minmax(0, 1fr): keeps both columns inside the fixed height.
+          (An implicit "auto" row grows to fit the thumbnails' natural size and overflows.) */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 lg:grid-rows-1 gap-2 lg:h-[460px]">
+        <div className="relative lg:col-span-3 aspect-[4/3] sm:aspect-[16/9] lg:aspect-auto min-h-0 rounded-2xl overflow-hidden bg-gray-900">
           {images.map((url, i) => (
-            <img
+            <div
               key={url}
-              src={optimizedImage(url, 1400)}
-              alt={`${title}, photo ${i + 1}`}
-              loading={i === 0 ? "eager" : "lazy"}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${i === index ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-            />
+              className={`absolute inset-0 transition-opacity duration-500 ${i === index ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              aria-hidden={i !== index}
+            >
+              {/* Blurred fill behind the photo, so small or portrait photos aren't stretched or cropped */}
+              <img src={optimizedImage(url, 400)} alt="" aria-hidden="true" loading="lazy" className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-60" />
+              <img
+                src={optimizedImage(url, 1400)}
+                alt={`${title}, photo ${i + 1}`}
+                loading={i === 0 ? "eager" : "lazy"}
+                className="relative w-full h-full object-contain"
+              />
+            </div>
           ))}
           {count > 1 && (
             <>
@@ -64,10 +73,18 @@ function Gallery({ images, title }) {
         </div>
 
         {count > 1 && (
-          <div className="hidden lg:grid grid-rows-3 gap-2">
+          <div className="hidden lg:grid grid-rows-3 gap-2 min-h-0">
             {images.slice(0, 3).map((url, i) => (
-              <button key={url} onClick={() => setIndex(i)} className={`rounded-2xl overflow-hidden bg-gray-100 ring-2 ${i === index ? "ring-blue-600" : "ring-transparent"}`} aria-label={`Show photo ${i + 1}`}>
-                <img src={optimizedImage(url, 400)} alt="" loading="lazy" className="w-full h-full object-cover" />
+              <button
+                key={url}
+                onClick={() => (i === 2 && count > 3 ? setShowAll(true) : setIndex(i))}
+                className={`relative min-h-0 rounded-2xl overflow-hidden bg-gray-100 ring-2 ring-inset ${i === index ? "ring-blue-600" : "ring-transparent"}`}
+                aria-label={i === 2 && count > 3 ? `Show all ${count} photos` : `Show photo ${i + 1}`}
+              >
+                <img src={optimizedImage(url, 400)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                {i === 2 && count > 3 && (
+                  <span className="absolute inset-0 bg-black/50 text-white font-semibold flex items-center justify-center">+{count - 3} more</span>
+                )}
               </button>
             ))}
           </div>
@@ -93,6 +110,12 @@ function Gallery({ images, title }) {
       )}
     </>
   );
+}
+
+/** "Patia, Bhubaneswar, India", without repeating the country if the location already names it */
+function fullLocation({ location = "", country = "" }) {
+  if (!country || location.toLowerCase().includes(country.toLowerCase())) return location;
+  return `${location}, ${country}`;
 }
 
 function Fact({ icon: Icon, label, value }) {
@@ -185,7 +208,7 @@ export default function PropertyDetails() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{listing.title}</h1>
           <p className="text-gray-600 flex items-center gap-1">
-            <MapPin size={16} /> {listing.location}{listing.country ? `, ${listing.country}` : ""}
+            <MapPin size={16} className="shrink-0" /> {fullLocation(listing)}
           </p>
           {listing.rating?.count > 0 && (
             <a href="#reviews" className="mt-1 inline-flex items-center gap-2 text-sm text-gray-700">
@@ -264,8 +287,8 @@ export default function PropertyDetails() {
           </div>
         </div>
 
-        <aside className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 lg:sticky lg:top-24">
+        <aside className="lg:col-span-1 lg:self-start lg:sticky lg:top-24">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
             <p className="text-sm text-gray-500">{isRent ? "Monthly rent" : "Price"}</p>
             <p className="text-3xl font-bold text-gray-900 mb-1">{formatListingPrice(listing)}</p>
             {isRent && Number.isFinite(listing.deposit) && (

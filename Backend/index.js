@@ -10,26 +10,29 @@ if (process.env.NODE_ENV !== "production") {
 // ==============================
 const express = require("express");
 const mongoose = require("mongoose");
-const methodOverride = require("method-override");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
 const cors = require("cors");
+const helmet = require("helmet");
 
-const ExpressError = require("./utils/ExpressError");
 const User = require("./models/user");
 
 // Routes
 const listingsRouter = require("./routes/listing");
 const reviewsRouter = require("./routes/review");
+const enquiryRouter = require("./routes/enquiry");
 const userRouter = require("./routes/user");
+const contactRouter = require("./routes/contact");
 
 // ==============================
 // App Initialization
 // ==============================
 const app = express();
-app.set("trust proxy", 1); // Required for secure cookies behind Render/Vercel/etc
+app.set("trust proxy", 1); // Required for secure cookies behind Render/Vercel
+
+const isProd = process.env.NODE_ENV === "production";
 
 // ==============================
 // Environment Validation
@@ -54,26 +57,37 @@ if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
 })();
 
 // ==============================
-// CORS Configuration
+// Security headers + CORS
 // ==============================
-// Simplified, permissive CORS so that any browser origin
-// (including https://prorental.vercel.app and local dev)
-// can talk to this API. This avoids deployment/env var issues.
+app.use(helmet());
+
+// Only our own frontends may make credentialed requests.
+// CLIENT_URL may hold several origins separated by commas.
+const allowedOrigins = new Set(
+    [
+        ...(process.env.CLIENT_URL || "").split(","),
+        "https://prorental.vercel.app",
+        "http://localhost:5173",
+    ]
+        .map((o) => o.trim().replace(/\/$/, ""))
+        .filter(Boolean)
+);
+
 const corsOptions = {
-    origin: true,        // Reflects the request Origin header
-    credentials: true,   // Allow cookies/credentials
+    origin(origin, cb) {
+        // Same-origin requests (e.g. via the Vercel proxy) and tools like curl send no Origin.
+        if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+        return cb(null, false);
+    },
+    credentials: true,
 };
-
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-
 
 // ==============================
-// Middleware
+// Body parsing
 // ==============================
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(methodOverride("_method"));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
+app.use(express.json({ limit: "100kb" }));
 
 // ==============================
 // Session Store
@@ -90,6 +104,7 @@ store.on("error", (err) => {
 
 app.use(
     session({
+        name: "prorental.sid",
         store,
         secret: SESSION_SECRET,
         resave: false,
@@ -97,8 +112,11 @@ app.use(
         cookie: {
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             httpOnly: true,
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            secure: process.env.NODE_ENV === "production",
+            // The frontend talks to the API through a same-site proxy (vercel.json),
+            // so "lax" works and protects against cross-site request forgery.
+            // Set COOKIE_SAMESITE=none only if the frontend calls the API cross-site.
+            sameSite: process.env.COOKIE_SAMESITE || "lax",
+            secure: isProd,
         },
     })
 );
@@ -109,13 +127,7 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.use(
-    new LocalStrategy(
-        { usernameField: "email" },
-        User.authenticate()
-    )
-);
-
+passport.use(new LocalStrategy({ usernameField: "email" }, User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
@@ -123,13 +135,24 @@ passport.deserializeUser(User.deserializeUser());
 // Routes
 // ==============================
 app.get("/", (req, res) => {
-    res.json({ message: "Welcome to the Wanderlust API!" });
+    res.json({ message: "Welcome to the ProRental API!" });
+});
+
+app.get("/api/health", (req, res) => {
+    res.json({ ok: true });
 });
 
 app.use("/api/listings/:id/reviews", reviewsRouter);
+app.use("/api/listings/:id/enquiries", enquiryRouter.listingEnquiries);
+app.use("/api/enquiries", enquiryRouter.ownerEnquiries);
 app.use("/api/listings", listingsRouter);
+app.use("/api/contact", contactRouter);
 app.use("/api/users", userRouter);
 app.use("/users", userRouter); // Frontend compatibility
+
+app.use((req, res) => {
+    res.status(404).json({ error: "Not found" });
+});
 
 // ==============================
 // Global Error Handler
@@ -139,12 +162,6 @@ app.use((err, req, res, next) => {
         return next(err);
     }
 
-    console.error("Global error handler:", {
-        name: err.name,
-        message: err.message,
-        statusCode: err.statusCode,
-    });
-
     let statusCode = err.statusCode || 500;
     let message = err.message || "Something went wrong!";
 
@@ -153,9 +170,12 @@ app.use((err, req, res, next) => {
     } else if (err.name === "CastError") {
         statusCode = 400;
         message = "Invalid data format";
-    } else if (err.message?.includes("Cloudinary")) {
-        statusCode = 500;
-        message = "Image upload failed. Check Cloudinary configuration.";
+    }
+
+    if (statusCode >= 500) {
+        console.error("Unhandled error:", err);
+        // Never leak internal error details to clients
+        message = "Something went wrong. Please try again.";
     }
 
     res.status(statusCode).json({ error: message });

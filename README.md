@@ -1,95 +1,96 @@
-## proRental
+## ProRental
 
-proRental is a full‑stack rental property platform with:
+ProRental is a full-stack property rental platform. Owners list properties for free, and tenants and buyers search, save favourites, leave reviews and contact owners directly.
 
-- **Backend**: Node.js + Express + MongoDB (Mongoose), authentication with Passport, sessions, validation with Joi, file uploads with Multer + Cloudinary, and Mapbox integration for location/maps.
-- **Frontend**: React + Vite + React Router, styled with Tailwind CSS, providing pages for browsing properties, adding new listings, managing your own properties, and basic auth flows.
+- **Backend** (`Backend/`): Node.js, Express, MongoDB (Mongoose), Passport sessions, Joi validation, Multer + Cloudinary image uploads, helmet, rate limiting, and geocoding (Mapbox, with OpenStreetMap Nominatim as a fallback)
+- **Frontend** (`Frontend/`): React 19, Vite, React Router and Tailwind CSS
+
+### Features
+
+- Search with filters for text, rent/buy, property type, budget, bedrooms, furnishing and amenities, plus sorting and pagination. Filters are stored in the URL, so searches can be shared.
+- Listings with 1–8 photos and rental terms: deposit, furnishing, available-from date, preferred tenants and pets.
+- Property page with a photo gallery, map, reviews and star ratings, and a "contact owner / request a visit" form.
+- Owner dashboard (`/my-properties`) for managing listings, with an enquiries inbox.
+- Wishlist of saved properties.
+- Login and signup in a modal or on the `/login` page.
 
 ### Project structure
 
-- **Backend**: `Backend/` – Express server, models, routes, controllers, middleware, and utility helpers.
-- **Frontend**: `Frontend/` – React SPA built with Vite, Tailwind, and component/page structure.
+```
+Backend/
+  index.js              app setup (security headers, CORS, sessions, routes)
+  models/               Listing, Review, User, Enquiry, ContactMessage
+  controllers/ routes/  listings, reviews, enquiries, users, contact
+  middleware.js         auth/ownership checks, validation, rate limiters
+  schema.js             Joi request schemas
+  utils/geocode.js      best-effort geocoding
+  scripts/              e2e test + one-off data fix
+Frontend/
+  src/pages/            route pages (lazy-loaded)
+  src/components/       Layout, Navbar, PropertyCard, PropertyForm, Reviews, ...
+  src/context/          AuthContext (user, wishlist, login modal), ToastContext
+  src/utils/            api() fetch helper, property constants/formatters
+```
 
-### Prerequisites
+### Backend setup
 
-- **Node.js**: version `22.13.1` (or compatible with that engine)
-- **MongoDB**: a running MongoDB instance (local or hosted)
-- **Cloudinary account**: for image upload and storage
-- **Mapbox access token**: for map and geocoding features
+```bash
+cd Backend
+npm install
+```
 
-### Backend setup (`Backend/`)
+Create `Backend/.env`:
 
-1. **Install dependencies**
+```bash
+ATLAS_DB_URL=mongodb://127.0.0.1:27017/prorental   # or your Atlas URL
+SECRET=a_long_random_string
 
-   ```bash
-   cd Backend
-   npm install
-   ```
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
 
-2. **Environment variables**
+MAP_TOKEN=...            # optional: Mapbox token; falls back to OpenStreetMap if missing/invalid
+CLIENT_URL=https://prorental.vercel.app   # comma-separated list of allowed frontend origins
+```
 
-   Create a `.env` file in `Backend/` with values appropriate for your environment, for example:
+```bash
+npm run dev      # restarts on file changes, port 8080
+```
 
-   ```bash
-   CLOUDINARY_CLOUD_NAME=your_cloud_name
-   CLOUDINARY_KEY=your_cloudinary_key
-   CLOUDINARY_SECRET=your_cloudinary_secret
+### Frontend setup
 
-   MAPBOX_TOKEN=your_mapbox_token
+```bash
+cd Frontend
+npm install
+npm run dev      # http://localhost:5173
+```
 
-   MONGODB_URI=mongodb://127.0.0.1:27017/prorental
+In development, Vite proxies `/api` and `/users` to `http://localhost:8080`, so no API URL configuration is needed.
 
-   SESSION_SECRET=change_this_secret
-   PORT=3000
-   ```
+### Deployment
 
-3. **Run the server**
+The frontend calls the API through relative URLs. On Vercel, `Frontend/vercel.json` proxies `/api/*` and `/users/*` to the Render backend. This makes the session cookie first-party, so login works in Safari and in browsers that block third-party cookies.
 
-   ```bash
-   npm start
-   ```
+- **Render (backend):** set `NODE_ENV=production` along with the variables above.
+- **Vercel (frontend):** no API variable is needed. The old `VITE_API_BASE_URL` is ignored and can be deleted. If the backend URL changes, update it in `vercel.json`.
 
-   By default the API will run on `http://localhost:3000` (or the `PORT` you set).
+### Testing
 
-### Frontend setup (`Frontend/`)
+`Backend/scripts/e2e.mjs` runs the main flows end to end: signup, listing creation, search, reviews, enquiries, wishlist, edit and delete. It creates data, so run it against a **local** database:
 
-1. **Install dependencies**
+```bash
+# terminal 1
+cd Backend && ATLAS_DB_URL=mongodb://127.0.0.1:27017/prorental_test npm start
+# terminal 2
+cd Backend && npm run test:e2e
+```
 
-   ```bash
-   cd Frontend
-   npm install
-   ```
+### Fixing older listings
 
-2. **Development server**
+Listings created while geocoding was disabled are stored at coordinates `[0, 0]`, and their country is a hard-coded "USA". To preview the fix, then apply it:
 
-   ```bash
-   npm run dev
-   ```
-
-   This starts Vite (by default on something like `http://localhost:5173`). The frontend is expected to talk to the backend running on `http://localhost:3000` – update any API base URL in `src/utils/api.js` if your setup differs.
-
-3. **Build for production**
-
-   ```bash
-   npm run build
-   ```
-
-### Key features
-
-- **Property listings**: create, view, and manage rental properties.
-- **User accounts & auth**: sign up, log in, and manage your own listings (Passport + sessions).
-- **Image uploads**: upload property images via Cloudinary.
-- **Maps & locations**: Mapbox‑powered location handling for properties.
-- **Modern UI**: responsive React frontend with Tailwind CSS and React Router.
-
-### Scripts overview
-
-- **Backend**
-  - `npm start` – start the Express server.
-
-- **Frontend**
-  - `npm run dev` – start the Vite dev server.
-  - `npm run build` – build the production bundle.
-  - `npm run preview` – preview the production build.
-  - `npm run lint` – run ESLint for the frontend.
-
+```bash
+cd Backend
+node scripts/fix-existing-listings.js --country=India           # dry run
+node scripts/fix-existing-listings.js --country=India --apply
+```

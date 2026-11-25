@@ -1,262 +1,197 @@
 const Listing = require("../models/listing");
-// Geocoding disabled temporarily due to API issues
-// const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
-// const mapToken = process.env.MAP_TOKEN;
-// const geocodingClient = mbxGeocoding({ accessToken: mapToken });
+const geocode = require("../utils/geocode");
+const { deleteImages, deleteUploadedFiles, MAX_IMAGES } = require("../cloudConfig");
 
-// All Listings (GET /api/listings)
-// Returns all listings as a JSON array.
+// Only expose public profile fields of users (never emails) on public endpoints.
+const PUBLIC_USER_FIELDS = "firstName lastName";
+
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const toInt = (value, fallback, { min = 0, max = Infinity } = {}) => {
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(Math.max(n, min), max);
+};
+
+const SORTS = {
+    newest: { createdAt: -1, _id: -1 },
+    price_asc: { price: 1, _id: 1 },
+    price_desc: { price: -1, _id: -1 },
+};
+
+/**
+ * GET /api/listings
+ * Query: q, type (rent|buy), category, minPrice, maxPrice, bedrooms (min), furnishing,
+ *        amenities (comma separated, all must match), sort (newest|price_asc|price_desc), page, limit
+ * Returns: { listings, total, page, pages }
+ */
 module.exports.index = async (req, res) => {
-  const allListings = await Listing.find({});
-  
-  // Cloudinary URLs are already full URLs, no transformation needed
-  const listings = allListings.map(listing => listing.toObject());
-  
-  res.json(listings);
+    const { q, type, category, furnishing, amenities, sort } = req.query;
+    const filter = {};
+
+    if (typeof q === "string" && q.trim()) {
+        const rx = new RegExp(escapeRegex(q.trim().slice(0, 100)), "i");
+        filter.$or = [{ title: rx }, { location: rx }, { country: rx }, { description: rx }];
+    }
+    if (type === "rent" || type === "buy") filter.type = type;
+    if (typeof category === "string" && category) filter.propertyCategory = category;
+    if (typeof furnishing === "string" && furnishing) filter.furnishing = furnishing;
+
+    const minPrice = Number(req.query.minPrice);
+    const maxPrice = Number(req.query.maxPrice);
+    if (Number.isFinite(minPrice) && minPrice > 0) filter.price = { ...filter.price, $gte: minPrice };
+    if (Number.isFinite(maxPrice) && maxPrice > 0) filter.price = { ...filter.price, $lte: maxPrice };
+
+    const bedrooms = Number(req.query.bedrooms);
+    if (Number.isFinite(bedrooms) && bedrooms > 0) filter.bedrooms = { $gte: bedrooms };
+
+    if (typeof amenities === "string" && amenities) {
+        filter.amenities = { $all: amenities.split(",").map((a) => a.trim()).filter(Boolean).slice(0, 20) };
+    }
+
+    const limit = toInt(req.query.limit, 12, { min: 1, max: 50 });
+    const page = toInt(req.query.page, 1, { min: 1 });
+
+    const [listings, total] = await Promise.all([
+        Listing.find(filter)
+            .sort(SORTS[sort] || SORTS.newest)
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select("-reviews -description")
+            .lean(),
+        Listing.countDocuments(filter),
+    ]);
+
+    res.json({ listings, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
 };
 
-// Render New Form (GET /api/listings/new)
-// This is not needed in an API. The frontend will handle its own forms.
-
-// Show Listing (GET /api/listings/:id)
-// Returns a single listing with populated reviews and owner details as JSON.
+// GET /api/listings/:id
 module.exports.showListing = async (req, res) => {
-  let { id } = req.params;
-  const listing = await Listing.findById(id)
-    .populate({
-      path: "reviews",
-      populate: {
-        path: "author",
-      },
-    })
-    .populate("owner");
-
-  if (!listing) {
-    // Return a 404 error with a JSON message instead of redirecting.
-    return res.status(404).json({ error: "Property does not exist!" });
-  }
-  
-  // Cloudinary URLs are already full URLs, no transformation needed
-  res.json(listing.toObject());
-};
-
-// Create Listing (POST /api/listings)
-// Creates a new listing and returns the created object or a success message as JSON.
-module.exports.createListing = async (req, res, next) => {
-  try {
-    // Check if files were uploaded (req.files is an array for multiple uploads)
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: "At least one property image is required" });
-    }
-
-    // Validate that we have between 1 and 8 images
-    if (req.files.length < 1 || req.files.length > 8) {
-      return res.status(400).json({ error: "Please upload between 1 and 8 images" });
-    }
-
-    // Validate location exists
-    if (!req.body.listing || !req.body.listing.location) {
-      return res.status(400).json({ error: "Location is required" });
-    }
-
-    // Geocoding disabled temporarily due to API issues
-    // let response;
-    // try {
-    //   response = await geocodingClient
-    //     .forwardGeocode({
-    //       query: req.body.listing.location,
-    //       limit: 1,
-    //     })
-    //     .send();
-    // } catch (geocodeError) {
-    //   console.error('Geocoding error:', geocodeError);
-    //   return res.status(500).json({ error: "Failed to geocode location. Please check the location and try again." });
-    // }
-    // if (!response.body || !response.body.features || response.body.features.length === 0) {
-    //   return res.status(400).json({ error: "Could not find the specified location. Please provide a more specific address." });
-    // }
-
-    // Process all uploaded images
-    const images = [];
-    for (const file of req.files) {
-      // Validate Cloudinary upload was successful for each file
-      if (!file || !file.path) {
-        console.error('Cloudinary upload failed for file:', file);
-        return res.status(500).json({ error: "Failed to upload one or more images to cloud storage. Please try again." });
-      }
-
-      const imageData = {
-        url: file.path, // Cloudinary URL
-        filename: file.filename || file.public_id // Cloudinary public_id
-      };
-      
-      images.push(imageData);
-      
-      console.log('Image uploaded successfully to Cloudinary:', {
-        url: imageData.url,
-        filename: imageData.filename,
-        originalname: file.originalname,
-        index: images.length
-      });
-    }
-    
-    // Get the first image as the main image (for backward compatibility)
-    const mainImage = images[0];
-    
-    const listingData = { ...req.body.listing };
-    
-    // Parse amenities if it's a JSON string
-    if (listingData.amenities && typeof listingData.amenities === 'string') {
-      try {
-        listingData.amenities = JSON.parse(listingData.amenities);
-      } catch (e) {
-        listingData.amenities = [];
-      }
-    }
-    
-    const newListing = new Listing(listingData);
-    newListing.owner = req.user._id;
-    newListing.image = mainImage; // Main image (first image) for backward compatibility
-    newListing.images = images; // All images array (1-8 images)
-    // Geocoding disabled: use default geometry (required by schema)
-    // newListing.geometry = response.body.features[0].geometry;
-    newListing.geometry = { type: "Point", coordinates: [0, 0] };
-    let savedListing = await newListing.save();
-
-    console.log(`Successfully created listing with ${images.length} image(s)`);
-
-    // Return a success message and the new listing data.
-    res.status(201).json({
-      message: "New Property Created!",
-      listing: savedListing.toObject(),
-    });
-  } catch (error) {
-    console.error('Error creating listing:', error);
-    // Pass error to error handling middleware
-    next(error);
-  }
-};
-
-// Render Edit Form (GET /api/listings/:id/edit)
-// Returns a single listing's data for editing as JSON.
-module.exports.renderEditForm = async (req, res) => {
-  let { id } = req.params;
-  const listing = await Listing.findById(id);
-
-  if (!listing) {
-    return res.status(404).json({ error: "Property does not exist!" });
-  }
-
-  res.json(listing);
-};
-
-// Update Listing (PUT /api/listings/:id)
-// Updates a listing and returns the updated object as JSON.
-// Supports: keepImages (array of existing image URLs to keep) + new uploads (listing[images]).
-// Final images = kept + new; at least 1 image required. Removed images are deleted from Cloudinary.
-module.exports.updateListing = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const listing = await Listing.findById(id);
-    const cloudinary = require("../cloudConfig").cloudinary;
+    const listing = await Listing.findById(req.params.id)
+        .populate({
+            path: "reviews",
+            options: { sort: { createdAt: -1 } },
+            populate: { path: "author", select: PUBLIC_USER_FIELDS },
+        })
+        .populate("owner", PUBLIC_USER_FIELDS)
+        .lean();
 
     if (!listing) {
-      return res.status(404).json({ error: "Property does not exist!" });
+        return res.status(404).json({ error: "Property does not exist!" });
     }
 
-    // Existing images: prefer listing.images array, fallback to single listing.image
-    const existingImages = Array.isArray(listing.images) && listing.images.length > 0
-      ? listing.images
-      : listing.image && listing.image.url
-        ? [{ url: listing.image.url, filename: listing.image.filename }]
-        : [];
+    const ratings = listing.reviews.map((r) => r.rating).filter(Number.isFinite);
+    listing.rating = {
+        average: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null,
+        count: ratings.length,
+    };
 
-    const keepUrls = Array.isArray(req.body?.listing?.keepImages)
-      ? req.body.listing.keepImages
-      : [];
+    res.json(listing);
+};
 
-    const keptImages = existingImages.filter((img) => img && img.url && keepUrls.includes(img.url));
-    const newFiles = req.files || [];
-    const newImages = newFiles
-      .filter((f) => f && f.path)
-      .map((f) => ({ url: f.path, filename: f.filename || f.public_id }));
+const filesToImages = (files = []) =>
+    files.filter((f) => f && f.path).map((f) => ({ url: f.path, filename: f.filename }));
 
+// POST /api/listings
+module.exports.createListing = async (req, res) => {
+    const images = filesToImages(req.files);
+    if (images.length === 0) {
+        return res.status(400).json({ error: "At least one property image is required" });
+    }
+
+    try {
+        const { keepImages, ...listingData } = req.body.listing;
+        const newListing = new Listing(listingData);
+        newListing.owner = req.user._id;
+        newListing.images = images;
+        newListing.image = images[0];
+
+        const geometry = await geocode(newListing.location, newListing.country);
+        if (geometry) newListing.geometry = geometry;
+
+        const savedListing = await newListing.save();
+        res.status(201).json({ message: "New Property Created!", listing: savedListing.toObject() });
+    } catch (err) {
+        await deleteUploadedFiles(req.files);
+        throw err;
+    }
+};
+
+// GET /api/listings/:id/edit (owner only; isOwner loads the listing)
+module.exports.renderEditForm = async (req, res) => {
+    res.json(res.locals.listing);
+};
+
+// PUT /api/listings/:id (owner only)
+// Final images = existing images listed in keepImages + new uploads; at least 1, at most MAX_IMAGES.
+module.exports.updateListing = async (req, res) => {
+    const listing = res.locals.listing;
+    const { keepImages = [], ...updates } = req.body.listing;
+
+    const existingImages = listing.images && listing.images.length > 0
+        ? listing.images
+        : listing.image && listing.image.url ? [listing.image] : [];
+
+    const keptImages = existingImages.filter((img) => keepImages.includes(img.url));
+    const newImages = filesToImages(req.files);
     const finalImages = [...keptImages, ...newImages];
 
-    if (finalImages.length === 0) {
-      return res.status(400).json({ error: "At least one image is required. Keep existing or add new images." });
+    if (finalImages.length === 0 || finalImages.length > MAX_IMAGES) {
+        await deleteUploadedFiles(req.files);
+        return res.status(400).json({ error: `A property needs between 1 and ${MAX_IMAGES} images.` });
     }
 
-    // Delete from Cloudinary any existing image that was not kept
-    for (const img of existingImages) {
-      if (!img.filename) continue;
-      if (keepUrls.includes(img.url)) continue;
-      try {
-        await cloudinary.uploader.destroy(img.filename);
-      } catch (err) {
-        console.error("Error deleting old image from Cloudinary:", err);
-      }
-    }
+    const locationChanged =
+        (updates.location && updates.location !== listing.location) ||
+        (updates.country && updates.country !== listing.country);
 
-    listing.image = finalImages[0];
+    // Fields that can be cleared from the form need to be explicitly unset.
+    for (const field of ["deposit", "furnishing", "availableFrom", "preferredTenants", "petsAllowed", "bedrooms", "bathrooms", "area"]) {
+        if (!(field in updates)) listing[field] = undefined;
+    }
+    Object.assign(listing, updates);
     listing.images = finalImages;
+    listing.image = finalImages[0];
 
-    // Update other listing fields (avoid overwriting with keepImages)
-    const bodyListing = req.body?.listing ? { ...req.body.listing } : {};
-    delete bodyListing.keepImages;
-    delete bodyListing.image;
-    delete bodyListing.images;
-    Object.assign(listing, bodyListing);
+    // Listings created while geocoding was disabled were stored at [0, 0].
+    const coords = listing.geometry && listing.geometry.coordinates;
+    const hasValidGeometry = Array.isArray(coords) && coords.length === 2 && !(coords[0] === 0 && coords[1] === 0);
 
-    await listing.save();
+    if (locationChanged || !hasValidGeometry) {
+        const geometry = await geocode(listing.location, listing.country);
+        listing.geometry = geometry || undefined;
+    }
+
+    try {
+        await listing.save();
+    } catch (err) {
+        await deleteUploadedFiles(req.files);
+        throw err;
+    }
+
+    // Only delete removed images once the update has been saved.
+    const removed = existingImages.filter((img) => !keepImages.includes(img.url));
+    await deleteImages(removed);
 
     res.json({ message: "Property Details Updated!", listing: listing.toObject() });
-  } catch (err) {
-    next(err);
-  }
 };
 
-// Delete Listing (DELETE /api/listings/:id)
-// Deletes a listing and returns a success message as JSON.
+// DELETE /api/listings/:id (owner only)
 module.exports.destroyListing = async (req, res) => {
-  let { id } = req.params;
-  const listing = await Listing.findById(id);
-
-  if (!listing) {
-    return res.status(404).json({ error: "Property does not exist!" });
-  }
-
-  // Delete image from Cloudinary if it exists
-  if (listing.image && listing.image.filename) {
-    const cloudinary = require('../cloudConfig').cloudinary;
-    try {
-      await cloudinary.uploader.destroy(listing.image.filename);
-    } catch (error) {
-      console.error('Error deleting image from Cloudinary:', error);
+    const listing = res.locals.listing;
+    const images = [...(listing.images || [])];
+    if (listing.image && listing.image.filename && !images.some((i) => i.filename === listing.image.filename)) {
+        images.push(listing.image);
     }
-  }
 
-  await Listing.findByIdAndDelete(id);
+    await Listing.findByIdAndDelete(listing._id);
+    await deleteImages(images);
 
-  res.json({ message: "Property Deleted!" });
+    res.json({ message: "Property Deleted!" });
 };
 
-// Get User's Listings (GET /api/listings/owner/properties)
-// Returns all listings owned by the current user.
+// GET /api/listings/owner/properties
 module.exports.getUserListings = async (req, res) => {
-  try {
-    if (!req.isAuthenticated() || !req.user) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
-    
-    const userListings = await Listing.find({ owner: req.user._id });
-    
-    // Cloudinary URLs are already full URLs, no transformation needed
-    const listings = userListings.map(listing => listing.toObject());
-    
+    const listings = await Listing.find({ owner: req.user._id }).sort({ createdAt: -1 }).lean();
     res.json(listings);
-  } catch (error) {
-    console.error('Error in getUserListings:', error);
-    res.status(500).json({ error: "Failed to fetch user listings" });
-  }
 };

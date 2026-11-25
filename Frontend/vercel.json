@@ -1,6 +1,7 @@
 {
   "rewrites": [
+    { "source": "/api/:path*", "destination": "https://prorental.onrender.com/api/:path*" },
+    { "source": "/users/:path*", "destination": "https://prorental.onrender.com/users/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-

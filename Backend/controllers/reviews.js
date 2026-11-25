@@ -1,40 +1,38 @@
 const Listing = require("../models/listing");
 const Review = require("../models/review");
 
-// createReview (POST /api/listings/:id/reviews)
-// Creates a new review and returns the created review as JSON.
+// POST /api/listings/:id/reviews
 module.exports.createReview = async (req, res) => {
-    let listing = await Listing.findById(req.params.id);
+    const listing = await Listing.findById(req.params.id).populate("reviews", "author");
     if (!listing) {
         return res.status(404).json({ error: "Listing not found" });
     }
-    
-    let newReview = new Review(req.body.review);
+    if (listing.owner && listing.owner.equals(req.user._id)) {
+        return res.status(403).json({ error: "You can't review your own property." });
+    }
+    if (listing.reviews.some((r) => r.author && r.author.equals(req.user._id))) {
+        return res.status(409).json({ error: "You have already reviewed this property." });
+    }
+
+    const newReview = new Review(req.body.review);
     newReview.author = req.user._id;
-
-    listing.reviews.push(newReview);
-
     await newReview.save();
-    await listing.save();
-    
-    // Send a 201 Created status and the new review object.
-    res.status(201).json({ 
+
+    await Listing.updateOne({ _id: listing._id }, { $push: { reviews: newReview._id } });
+
+    res.status(201).json({
         message: "Review added successfully!",
-        review: newReview 
+        review: {
+            ...newReview.toObject(),
+            author: { _id: req.user._id, firstName: req.user.firstName, lastName: req.user.lastName },
+        },
     });
 };
 
-// destroyReview (DELETE /api/listings/:id/reviews/:reviewId)
-// Deletes a review and returns a success message as JSON.
+// DELETE /api/listings/:id/reviews/:reviewId
 module.exports.destroyReview = async (req, res) => {
-    let { id, reviewId } = req.params;
-    
-    // Atomically remove the review reference from the listing.
+    const { id, reviewId } = req.params;
     await Listing.findByIdAndUpdate(id, { $pull: { reviews: reviewId } });
-    
-    // Delete the review document itself.
     await Review.findByIdAndDelete(reviewId);
-    
-    // Send a success message with a 200 OK status.
     res.status(200).json({ message: "Review deleted successfully!" });
 };

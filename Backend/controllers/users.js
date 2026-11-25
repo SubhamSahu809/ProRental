@@ -1,75 +1,77 @@
 const User = require("../models/user");
+const Listing = require("../models/listing");
 
+const toPublicUser = (user) => ({
+    id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    phone: user.phone || "",
+    wishlist: (user.wishlist || []).map(String),
+});
 
-// signup (POST)
-// Handles user registration and returns a JSON response.
+// POST /users/signup
 module.exports.signup = async (req, res, next) => {
+    const { firstName, lastName, email, password } = req.body;
     try {
-        let { firstName, lastName, email, password } = req.body;
         const newUser = new User({ firstName, lastName, email });
         const registeredUser = await User.register(newUser, password);
 
         req.login(registeredUser, (err) => {
-            if (err) {
-                return next(err);
-            }
-            // Send success message as JSON
-            res.status(201).json({ 
-                message: "User registered successfully!", 
-                user: {
-                    id: registeredUser._id,
-                    firstName: registeredUser.firstName,
-                    lastName: registeredUser.lastName,
-                    email: registeredUser.email
-                }
-            });
+            if (err) return next(err);
+            res.status(201).json({ message: "Account created!", user: toPublicUser(registeredUser) });
         });
     } catch (err) {
-        // Send error message as JSON
-        res.status(400).json({ error: err.message });
+        if (err.name === "UserExistsError" || err.code === 11000) {
+            return res.status(409).json({ error: "An account with this email already exists." });
+        }
+        next(err);
     }
 };
 
-
-// login (POST)
-// Handles user login and returns a JSON response with user info.
-module.exports.login = async (req, res) => {
-    // A successful login through Passport will set req.user
-    res.status(200).json({ 
-        message: "Login successful!", 
-        user: {
-            id: req.user._id,
-            firstName: req.user.firstName,
-            lastName: req.user.lastName,
-            email: req.user.email
-        }
-    });
+// POST /users/login (passport has already authenticated the user)
+module.exports.login = (req, res) => {
+    res.status(200).json({ message: "Login successful!", user: toPublicUser(req.user) });
 };
 
-// logout (GET)
-// Handles user logout and returns a JSON success message.
+// POST /users/logout
 module.exports.logout = (req, res, next) => {
     req.logout((err) => {
-        if (err) {
-            return res.status(500).json({ error: "Logout failed" });
-        }
-        res.status(200).json({ message: "You are logged out!" });
+        if (err) return next(err);
+        req.session.destroy(() => {
+            res.clearCookie("prorental.sid");
+            res.status(200).json({ message: "You are logged out!" });
+        });
     });
 };
 
-// getCurrentUser (GET)
-// Returns the current logged-in user information.
+// GET /users/me
 module.exports.getCurrentUser = (req, res) => {
     if (req.isAuthenticated() && req.user) {
-        res.status(200).json({
-            user: {
-                id: req.user._id,
-                firstName: req.user.firstName,
-                lastName: req.user.lastName,
-                email: req.user.email
-            }
-        });
-    } else {
-        res.status(401).json({ error: "Not authenticated" });
+        return res.status(200).json({ user: toPublicUser(req.user) });
     }
+    res.status(401).json({ error: "Not authenticated" });
+};
+
+// GET /users/wishlist
+module.exports.getWishlist = async (req, res) => {
+    const user = await User.findById(req.user._id).populate({
+        path: "wishlist",
+        select: "-reviews -description",
+    });
+    // Drop references to listings that have since been deleted
+    res.json(user.wishlist.filter(Boolean));
+};
+
+// POST /users/wishlist/:listingId  (toggles)
+module.exports.toggleWishlist = async (req, res) => {
+    const { listingId } = req.params;
+    const exists = await Listing.exists({ _id: listingId });
+    if (!exists) return res.status(404).json({ error: "Property does not exist!" });
+
+    const saved = req.user.wishlist.some((id) => id.equals(listingId));
+    const update = saved ? { $pull: { wishlist: listingId } } : { $addToSet: { wishlist: listingId } };
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
+
+    res.json({ saved: !saved, wishlist: user.wishlist.map(String) });
 };

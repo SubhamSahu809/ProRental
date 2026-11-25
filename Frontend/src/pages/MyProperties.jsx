@@ -1,180 +1,179 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Home, Edit, Trash2 } from 'lucide-react';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import { apiUrl } from "../utils/api";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Home, Pencil, Trash2, Mail, Phone, CalendarDays, Inbox } from "lucide-react";
+import PropertyCard from "../components/PropertyCard";
+import RequireAuth from "../components/RequireAuth";
+import Spinner from "../components/Spinner";
+import usePageTitle from "../hooks/usePageTitle";
+import { useToast } from "../context/ToastContext";
+import { api } from "../utils/api";
+import { formatDate } from "../utils/property";
 
-function MyProperties() {
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+function Listings() {
+  const toast = useToast();
+  const [properties, setProperties] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchMyProperties();
+    api("/api/listings/owner/properties").then(setProperties).catch((err) => setError(err.message));
   }, []);
 
-  const fetchMyProperties = async () => {
+  const handleDelete = async (property) => {
+    if (!window.confirm(`Delete "${property.title}" permanently? This cannot be undone.`)) return;
     try {
-      const response = await fetch(apiUrl("/api/listings/owner/properties"), {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-      
-      if (response.status === 401) {
-        setProperties([]);
-        navigate('/');
-        return;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Error response:', errorData);
-        throw new Error(`Failed to fetch properties: ${response.status} - ${errorData.error || 'Unknown error'}`);
-      }
-      
-      const data = await response.json();
-      setProperties(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching properties:', error);
-      setProperties([]);
-      alert(`Error loading properties: ${error.message}`);
-    } finally {
-      setLoading(false);
+      await api(`/api/listings/${property._id}`, { method: "DELETE" });
+      setProperties((list) => list.filter((p) => p._id !== property._id));
+      toast("Property deleted");
+    } catch (err) {
+      toast(err.message, "error");
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this property?')) {
-      return;
-    }
+  if (error) return <p className="text-red-600 py-12 text-center">{error}</p>;
+  if (!properties) return <Spinner label="Loading your properties..." />;
 
-    try {
-      // Use POST + method override to avoid CORS preflight issues with DELETE.
-      // Backend has method-override("_method") enabled, so this will still hit
-      // the DELETE /api/listings/:id route on the server.
-      const response = await fetch(apiUrl(`/api/listings/${id}`), {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          // Use a "simple" content type to avoid triggering a CORS preflight.
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
-        },
-        body: '', // no body needed; _method is in the query string
-      });
-
-      if (response.ok) {
-        setProperties(properties.filter(prop => prop._id !== id));
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to delete property:', response.status, errorData);
-      }
-    } catch (error) {
-      console.error('Error deleting property:', error);
-    }
-  };
-
-  if (loading) {
+  if (properties.length === 0) {
     return (
-      <div className="w-full mx-auto">
-        <Navbar />
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block w-8 h-8 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-600">Loading your properties...</p>
-            <p className="mt-2 text-sm text-gray-500">Check browser console for details</p>
-          </div>
-        </div>
-        <Footer />
+      <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+        <Home size={48} className="mx-auto text-gray-400 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">No properties yet</h2>
+        <p className="text-gray-600 mb-6">You haven&apos;t listed any properties yet.</p>
+        <Link to="/add-property" className="inline-flex bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 font-medium">
+          + List your first property
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="w-full mx-auto">
-      <Navbar />
-      <div className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">My Properties</h1>
-            <p className="text-gray-600">Manage all your listed properties</p>
-          </div>
-
-        {properties.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <Home size={48} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No Properties Yet</h2>
-            <p className="text-gray-600 mb-6">You haven't listed any properties yet.</p>
-            <button
-              onClick={() => navigate('/add-property')}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              + Add Your First Property
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property) => (
-              <div key={property._id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative">
-                  <img
-                    className="w-full h-48 object-cover"
-                    src={property.image?.url || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80'}
-                    alt={property.title}
-                  />
-                  <span className="absolute top-3 right-3 bg-white/90 text-xs font-medium px-2 py-0.5 rounded shadow text-gray-700">
-                    {property.type === 'rent' ? 'For Rent' : 'For Sale'}
-                  </span>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center text-xs text-gray-500 mb-1 gap-1">
-                    <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                    {property.location}
-                  </div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-1">{property.title}</h2>
-                  <div className="flex items-center text-xs text-gray-500 mb-2 gap-3">
-                    <span>{property.bedrooms || 0} 🛏️</span>
-                    <span>{property.bathrooms || 0} 🛁</span>
-                    <span>{property.area || 0} sqft</span>
-                  </div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-base font-bold text-green-600">
-                      ${property.price?.toLocaleString() || '0'}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => navigate(`/property/${property._id}`)}
-                      className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => navigate(`/property/${property._id}/edit`)}
-                      className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(property._id)}
-                      className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        </div>
-      </div>
-      <Footer />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {properties.map((property) => (
+        <PropertyCard
+          key={property._id}
+          listing={property}
+          actions={
+            <div className="flex gap-2">
+              <Link to={`/property/${property._id}/edit`} className="p-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" aria-label={`Edit ${property.title}`}>
+                <Pencil size={16} />
+              </Link>
+              <button onClick={() => handleDelete(property)} className="p-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100" aria-label={`Delete ${property.title}`}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          }
+        />
+      ))}
     </div>
   );
 }
 
-export default MyProperties;
+function Enquiries({ onUnreadChange }) {
+  const [enquiries, setEnquiries] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api("/api/enquiries/received").then(setEnquiries).catch((err) => setError(err.message));
+  }, []);
+
+  useEffect(() => {
+    if (enquiries) onUnreadChange(enquiries.filter((e) => !e.read).length);
+  }, [enquiries, onUnreadChange]);
+
+  const markRead = async (enquiry) => {
+    if (enquiry.read) return;
+    setEnquiries((list) => list.map((e) => (e._id === enquiry._id ? { ...e, read: true } : e)));
+    api(`/api/enquiries/${enquiry._id}/read`, { method: "PATCH" }).catch(() => {});
+  };
+
+  if (error) return <p className="text-red-600 py-12 text-center">{error}</p>;
+  if (!enquiries) return <Spinner label="Loading enquiries..." />;
+
+  if (enquiries.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+        <Inbox size={48} className="mx-auto text-gray-400 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">No enquiries yet</h2>
+        <p className="text-gray-600">When someone contacts you about a property, their message will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-4">
+      {enquiries.map((enq) => (
+        <li key={enq._id} className={`bg-white rounded-2xl border p-5 ${enq.read ? "border-gray-100" : "border-blue-300 shadow-sm"}`} onClick={() => markRead(enq)}>
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+            <div>
+              <p className="font-semibold text-gray-900">
+                {enq.name} {!enq.read && <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full align-middle">New</span>}
+              </p>
+              <p className="text-sm text-gray-500">
+                about{" "}
+                {enq.listing ? <Link to={`/property/${enq.listing._id}`} className="text-blue-600 hover:underline">{enq.listing.title}</Link> : "a deleted property"}
+                {" · "}{formatDate(enq.createdAt)}
+              </p>
+            </div>
+            {enq.visitDate && (
+              <span className="inline-flex items-center gap-1 text-sm bg-amber-50 text-amber-800 px-3 py-1 rounded-full">
+                <CalendarDays size={14} /> Visit requested: {formatDate(enq.visitDate)}
+              </span>
+            )}
+          </div>
+          <p className="text-gray-700 whitespace-pre-line mb-3">{enq.message}</p>
+          <div className="flex flex-wrap gap-2">
+            <a href={`mailto:${enq.email}?subject=${encodeURIComponent(`Re: ${enq.listing?.title || "your enquiry"}`)}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-black text-white text-sm">
+              <Mail size={14} /> {enq.email}
+            </a>
+            {enq.phone && (
+              <a href={`tel:${enq.phone}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-gray-300 text-sm">
+                <Phone size={14} /> {enq.phone}
+              </a>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function MyProperties() {
+  usePageTitle("My properties");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") === "enquiries" ? "enquiries" : "listings";
+  const [unread, setUnread] = useState(0);
+
+  return (
+    <RequireAuth message="Sign in to manage your properties.">
+      <div className="bg-gray-50 min-h-[70vh] py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-1">My properties</h1>
+              <p className="text-gray-600">Manage your listings and reply to enquiries</p>
+            </div>
+            <Link to="/add-property" className="inline-flex w-fit bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 font-medium">
+              + List property
+            </Link>
+          </div>
+
+          <div className="flex gap-1 mb-6 border-b border-gray-200" role="tablist">
+            {[{ v: "listings", l: "Listings" }, { v: "enquiries", l: "Enquiries" }].map(({ v, l }) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={tab === v}
+                onClick={() => setSearchParams(v === "listings" ? {} : { tab: v })}
+                className={`px-4 py-2 -mb-px border-b-2 font-medium ${tab === v ? "border-black text-black" : "border-transparent text-gray-500 hover:text-gray-800"}`}
+              >
+                {l}
+                {v === "enquiries" && unread > 0 && <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">{unread}</span>}
+              </button>
+            ))}
+          </div>
+
+          {tab === "listings" ? <Listings /> : <Enquiries onUnreadChange={setUnread} />}
+        </div>
+      </div>
+    </RequireAuth>
+  );
+}

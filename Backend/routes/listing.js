@@ -3,52 +3,36 @@ const router = express.Router();
 const wrapAsync = require("../utils/wrapAsync.js");
 const { isLoggedIn, isOwner, validateListing } = require("../middleware.js");
 const listingController = require("../controllers/listings.js");
-const { uploadArray, uploadArrayOptional, handleMulterError } = require("../cloudConfig.js");
+const { uploadImages } = require("../cloudConfig.js");
 
-// All Listing Route: Fetches all listings and returns them as JSON.
+// Search / browse listings (filters + pagination)
 router.get("/", wrapAsync(listingController.index));
 
-// Get User's Properties Route: Returns all listings owned by the current user.
-// MUST be before /:id route to avoid route conflicts
-// Using "owner" prefix to avoid conflicts with listing IDs
+// Listings owned by the current user. Must come before "/:id".
 router.get("/owner/properties", isLoggedIn, wrapAsync(listingController.getUserListings));
 
-// Create a new listing
-// The "new" route for rendering a form is not needed in a pure API.
-// The frontend will handle its own form rendering.
-
-// Show Route: Fetches a single listing and returns it as JSON.
 router.get("/:id", wrapAsync(listingController.showListing));
 
-// Create Route: Handles form data submission and returns the new listing as JSON.
 router.post(
-  "/",
-  isLoggedIn,
-  uploadArray("listing[images]", 8), // Handle 1-8 images with error handling
-  validateListing,
-  wrapAsync(listingController.createListing)
+    "/",
+    isLoggedIn,
+    uploadImages("listing[images]", { required: true }),
+    validateListing,
+    wrapAsync(listingController.createListing)
 );
 
-// Edit Route: Fetches a single listing's data for editing and returns it as JSON.
 router.get("/:id/edit", isLoggedIn, isOwner, wrapAsync(listingController.renderEditForm));
 
-// Update Route: Handles an update request and returns the updated listing as JSON.
 // Accepts 0-8 new images (listing[images]) and listing[keepImages][] for existing URLs to keep.
 router.put(
-  "/:id",
-  isLoggedIn,
-  isOwner,
-  uploadArrayOptional("listing[images]", 8),
-  validateListing,
-  wrapAsync(listingController.updateListing)
+    "/:id",
+    isLoggedIn,
+    isOwner,
+    uploadImages("listing[images]", { required: false }),
+    validateListing,
+    wrapAsync(listingController.updateListing)
 );
 
-// Delete Route: Deletes a listing and returns a success message as JSON.
-router.delete(
-  "/:id",
-  isLoggedIn,
-  isOwner,
-  wrapAsync(listingController.destroyListing)
-);
+router.delete("/:id", isLoggedIn, isOwner, wrapAsync(listingController.destroyListing));
 
 module.exports = router;

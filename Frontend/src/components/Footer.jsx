@@ -1,62 +1,45 @@
-import React from 'react';
+import { Link } from "react-router-dom";
+import { Home } from "lucide-react";
 
-const Footer = () => {
-  const currentYear = new Date().getFullYear();
+export default function Footer() {
+  const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-neutral-900 text-white py-12">
-      <div className="mx-auto w-full px-4">
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 md:col-span-7 mb-4 md:mb-0">
-            <div className="flex items-center mb-3">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded bg-white text-neutral-900 mr-2">🏠</span>
-              <span className="font-bold text-2xl">VISTAHAVEN</span>
-            </div>
-
-            <p className="mb-2">+1-800-555-1234</p>
-            <p className="mb-2">info@vistahaven.com</p>
-            <p className="mb-0">123 Serenity Boulevard, Greenwood Heights, NY 11222, United States</p>
-          </div>
-
-          <div className="col-span-12 md:col-span-5 flex flex-col justify-between md:items-end md:text-right">
-            <div className="flex mb-4 gap-3">
-              <a
-                href="https://www.facebook.com/vistahaven"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-neutral-600 text-white flex justify-center items-center w-10 h-10"
-                aria-label="Facebook Profile"
-              >
-                <span className="text-sm">f</span>
-              </a>
-
-              <a
-                href="https://www.linkedin.com/company/vistahaven"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-neutral-600 text-white flex justify-center items-center w-10 h-10"
-                aria-label="LinkedIn Profile"
-              >
-                <span className="text-sm">in</span>
-              </a>
-
-              <a
-                href="https://www.youtube.com/vistahaven"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-neutral-600 text-white flex justify-center items-center w-10 h-10"
-                aria-label="YouTube Channel"
-              >
-                <span className="text-sm">▶</span>
-              </a>
-            </div>
-
-            <p className="mb-0">&copy; Copyright {currentYear}. All Rights Reserved by oldshen</p>
-          </div>
+    <footer className="bg-neutral-900 text-neutral-300 mt-16">
+      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="col-span-2">
+          <Link to="/" className="flex items-center gap-2 mb-3 text-white">
+            <span className="w-8 h-8 rounded-lg bg-white text-neutral-900 flex items-center justify-center">
+              <Home size={18} />
+            </span>
+            <span className="font-bold text-xl">ProRental</span>
+          </Link>
+          <p className="max-w-sm text-sm leading-relaxed">
+            Find rental homes, flats and commercial spaces directly from owners. No middlemen, no hidden fees.
+          </p>
         </div>
+
+        <div>
+          <h3 className="text-white font-semibold mb-3">Explore</h3>
+          <ul className="space-y-2 text-sm">
+            <li><Link to="/properties?type=rent" className="hover:text-white">Properties for rent</Link></li>
+            <li><Link to="/properties?type=buy" className="hover:text-white">Properties for sale</Link></li>
+            <li><Link to="/add-property" className="hover:text-white">List your property</Link></li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-white font-semibold mb-3">Company</h3>
+          <ul className="space-y-2 text-sm">
+            <li><Link to="/about" className="hover:text-white">About us</Link></li>
+            <li><Link to="/services" className="hover:text-white">Services</Link></li>
+            <li><Link to="/#contact" className="hover:text-white">Contact</Link></li>
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-neutral-800">
+        <p className="max-w-7xl mx-auto px-4 py-4 text-xs text-neutral-500">&copy; {year} ProRental. All rights reserved.</p>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}

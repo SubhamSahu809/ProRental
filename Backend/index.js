@@ -8,6 +8,7 @@ if (process.env.NODE_ENV !== "production") {
 // ==============================
 // Imports
 // ==============================
+const dns = require("dns");
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
@@ -46,15 +47,39 @@ if (!SESSION_SECRET) throw new Error("Missing required env var: SECRET");
 // ==============================
 // Database Connection
 // ==============================
-(async function connectDB() {
-    try {
-        await mongoose.connect(DB_URL);
-        console.log("Connected to Database");
-    } catch (err) {
-        console.error("MongoDB connection error:", err);
-        process.exit(1);
+// "mongodb+srv://" URLs need a DNS SRV lookup. Some hosts' resolvers (seen on Render)
+// fail it with "querySrv ENOTFOUND" even though the record exists, so on that error
+// we switch to public DNS resolvers and retry with backoff instead of crash-looping.
+const MAX_DB_ATTEMPTS = 6;
+const PUBLIC_DNS = ["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let usingPublicDns = false;
+
+async function connectDB() {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await mongoose.connect(DB_URL, { serverSelectionTimeoutMS: 15000 });
+            console.log(`Connected to Database${usingPublicDns ? " (via public DNS)" : ""}`);
+            return mongoose;
+        } catch (err) {
+            console.error(`MongoDB connection failed (attempt ${attempt}/${MAX_DB_ATTEMPTS}):`, err.message);
+
+            if (!usingPublicDns && /querySrv|ENOTFOUND|ECONNREFUSED|ETIMEOUT/i.test(err.message)) {
+                dns.setServers(PUBLIC_DNS);
+                dns.promises.setServers(PUBLIC_DNS);
+                usingPublicDns = true;
+                console.warn("Retrying with public DNS servers for the SRV lookup");
+            }
+            if (attempt >= MAX_DB_ATTEMPTS) {
+                console.error("Giving up on MongoDB. Check ATLAS_DB_URL and Atlas Network Access (allow 0.0.0.0/0 for Render).");
+                process.exit(1);
+            }
+            await sleep(Math.min(30000, 1000 * 2 ** attempt));
+        }
     }
-})();
+}
+
+const dbReady = connectDB();
 
 // ==============================
 // Security headers + CORS
@@ -92,8 +117,9 @@ app.use(express.json({ limit: "100kb" }));
 // ==============================
 // Session Store
 // ==============================
+// Reuse mongoose's connection instead of opening a second one (which would repeat the DNS lookup)
 const store = MongoStore.create({
-    mongoUrl: DB_URL,
+    clientPromise: dbReady.then(() => mongoose.connection.getClient()),
     crypto: { secret: SESSION_SECRET },
     touchAfter: 24 * 60 * 60, // 1 day
 });
@@ -139,7 +165,8 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-    res.json({ ok: true });
+    const dbConnected = mongoose.connection.readyState === 1;
+    res.status(dbConnected ? 200 : 503).json({ ok: dbConnected, db: dbConnected ? "connected" : "connecting" });
 });
 
 app.use("/api/listings/:id/reviews", reviewsRouter);

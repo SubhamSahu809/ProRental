@@ -112,6 +112,23 @@ fd.append("listing[keepImages][]", listing.images[0].url);
 r = await owner(`/api/listings/${id}`, { method: "PUT", form: fd });
 check("edit listing", r.status === 200 && r.data.listing.price === 16000 && r.data.listing.deposit === undefined, r.data?.error || "");
 
+// photo order: add two new photos and put the second one first (as the cover)
+fd = new FormData();
+for (const [k, v] of Object.entries(fields)) fd.append(`listing[${k}]`, v);
+fd.append("listing[keepImages][]", listing.images[0].url);
+fd.append("listing[images]", new Blob([png], { type: "image/png" }), "b.png");
+fd.append("listing[images]", new Blob([png], { type: "image/png" }), "c.png");
+fd.append("listing[imageOrder][]", "new:1");
+fd.append("listing[imageOrder][]", `existing:${listing.images[0].url}`);
+fd.append("listing[imageOrder][]", "new:0");
+r = await owner(`/api/listings/${id}`, { method: "PUT", form: fd });
+const imgs = r.data?.listing?.images || [];
+check(
+  "photo order respected (cover = new:1)",
+  r.status === 200 && imgs.length === 3 && imgs[1].url === listing.images[0].url && r.data.listing.image.url === imgs[0].url && imgs[0].url !== imgs[2].url,
+  r.data?.error || ""
+);
+
 r = await owner(`/api/contact`, { method: "POST", json: { firstName: "A", email: "a@example.com", message: "Hello there" } });
 check("contact form", r.status === 201);
 

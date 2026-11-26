@@ -21,6 +21,8 @@ module.exports.listingSchema = Joi.object({
         preferredTenants: Joi.string().valid("any", "family", "bachelors", "students", "company").allow(null),
         petsAllowed: Joi.boolean().allow(null),
         keepImages: Joi.array().items(Joi.string().uri()).max(8),
+        // Desired photo order: "existing:<url>" or "new:<index of uploaded file>"
+        imageOrder: Joi.array().items(Joi.string().max(1000)).max(16),
     }).required(),
 });
 

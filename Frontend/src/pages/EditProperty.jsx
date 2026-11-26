@@ -43,21 +43,20 @@ function EditPropertyContent() {
   const existingImages = listing.images?.length ? listing.images : listing.image?.url ? [listing.image] : [];
 
   return (
-    <div className="bg-gray-50 py-10 px-4">
-      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 sm:px-8 py-6 text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Edit property</h1>
-          <p className="text-blue-100 mt-1 truncate">{listing.title}</p>
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="mb-6">
+          <Link to={`/property/${id}`} className="text-sm text-gray-500 hover:text-gray-900">← Back to listing</Link>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mt-2">Edit property</h1>
+          <p className="text-gray-600 mt-1 truncate">{listing.title}</p>
         </div>
-        <div className="p-5 sm:p-8">
-          <PropertyForm
-            initial={listingToForm(listing)}
-            existingImages={existingImages}
-            onSubmit={handleSubmit}
-            submitLabel="Save changes"
-            submittingLabel="Saving..."
-          />
-        </div>
+        <PropertyForm
+          initial={listingToForm(listing)}
+          existingImages={existingImages}
+          onSubmit={handleSubmit}
+          submitLabel="Save changes"
+          submittingLabel="Saving…"
+        />
       </div>
     </div>
   );

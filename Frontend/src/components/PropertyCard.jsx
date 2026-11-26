@@ -34,9 +34,10 @@ function Stat({ icon: Icon, children }) {
 
 export default function PropertyCard({ listing, actions }) {
   const { isSaved, toggleWishlist } = useAuth();
-  const [index, setIndex] = useState(0);
+  const [rawIndex, setIndex] = useState(0);
   const saved = isSaved(listing._id);
   const images = listingImages(listing).slice(0, 5);
+  const index = rawIndex % images.length; // images can shrink (e.g. live preview while editing)
   const count = listing.images?.length || images.length;
   const isRent = listing.type === "rent";
   const furnishing = isRent ? labelOf(FURNISHING_OPTIONS, listing.furnishing) : "";

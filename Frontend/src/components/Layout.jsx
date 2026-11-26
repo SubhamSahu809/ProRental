@@ -3,7 +3,8 @@ import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 
-const FULL_BLEED = new Set(["/", "/properties"]);
+// Pages with their own full-height background that should run straight into the footer
+const isFullBleed = (path) => ["/", "/properties", "/add-property"].includes(path) || /^\/property\/[^/]+\/edit$/.test(path);
 
 export default function Layout() {
   const { pathname, hash } = useLocation();
@@ -21,7 +22,7 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col bg-white">
       <Navbar />
       {/* Full-bleed pages run straight into the footer; other pages need breathing room */}
-      <main className={`flex-1 ${FULL_BLEED.has(pathname) ? "" : "pb-16"}`}>
+      <main className={`flex-1 ${isFullBleed(pathname) ? "" : "pb-16"}`}>
         <Outlet />
       </main>
       <Footer />

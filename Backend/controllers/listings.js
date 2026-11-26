@@ -92,15 +92,36 @@ module.exports.showListing = async (req, res) => {
 const filesToImages = (files = []) =>
     files.filter((f) => f && f.path).map((f) => ({ url: f.path, filename: f.filename }));
 
+/**
+ * Arrange kept + newly uploaded images in the order the client asked for.
+ * `order` items look like "existing:<url>" or "new:<index>"; anything not mentioned keeps its default place at the end.
+ */
+function orderImages(kept, uploaded, order) {
+    if (!Array.isArray(order) || order.length === 0) return [...kept, ...uploaded];
+    const result = [];
+    const used = new Set();
+    for (const token of order) {
+        let img;
+        if (token.startsWith("new:")) img = uploaded[Number(token.slice(4))];
+        else if (token.startsWith("existing:")) img = kept.find((k) => k.url === token.slice(9));
+        if (img && !used.has(img)) {
+            used.add(img);
+            result.push(img);
+        }
+    }
+    for (const img of [...kept, ...uploaded]) if (!used.has(img)) result.push(img);
+    return result;
+}
+
 // POST /api/listings
 module.exports.createListing = async (req, res) => {
-    const images = filesToImages(req.files);
+    const { keepImages, imageOrder, ...listingData } = req.body.listing;
+    const images = orderImages([], filesToImages(req.files), imageOrder);
     if (images.length === 0) {
         return res.status(400).json({ error: "At least one property image is required" });
     }
 
     try {
-        const { keepImages, ...listingData } = req.body.listing;
         const newListing = new Listing(listingData);
         newListing.owner = req.user._id;
         newListing.images = images;
@@ -126,15 +147,15 @@ module.exports.renderEditForm = async (req, res) => {
 // Final images = existing images listed in keepImages + new uploads; at least 1, at most MAX_IMAGES.
 module.exports.updateListing = async (req, res) => {
     const listing = res.locals.listing;
-    const { keepImages = [], ...updates } = req.body.listing;
+    const { keepImages = [], imageOrder, ...updates } = req.body.listing;
 
     const existingImages = listing.images && listing.images.length > 0
-        ? listing.images
-        : listing.image && listing.image.url ? [listing.image] : [];
+        ? listing.images.map((img) => ({ url: img.url, filename: img.filename }))
+        : listing.image && listing.image.url ? [{ url: listing.image.url, filename: listing.image.filename }] : [];
 
     const keptImages = existingImages.filter((img) => keepImages.includes(img.url));
     const newImages = filesToImages(req.files);
-    const finalImages = [...keptImages, ...newImages];
+    const finalImages = orderImages(keptImages, newImages, imageOrder);
 
     if (finalImages.length === 0 || finalImages.length > MAX_IMAGES) {
         await deleteUploadedFiles(req.files);

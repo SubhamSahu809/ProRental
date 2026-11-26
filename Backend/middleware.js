@@ -55,8 +55,10 @@ function normalizeListingBody(listing) {
     }
     listing.amenities = Array.isArray(amenities) ? amenities.filter(Boolean) : [];
 
-    if (listing.keepImages !== undefined && !Array.isArray(listing.keepImages)) {
-        listing.keepImages = [listing.keepImages];
+    for (const field of ["keepImages", "imageOrder"]) {
+        if (listing[field] !== undefined && !Array.isArray(listing[field])) {
+            listing[field] = [listing[field]];
+        }
     }
     return listing;
 }

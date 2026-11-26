@@ -109,6 +109,37 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // ==============================
+// Wait for the database
+// ==============================
+// On a cold start (e.g. Render free tier waking up) the server accepts requests
+// before MongoDB is connected. Without this, the first logins fail after mongoose's
+// 10s buffering timeout with a 500. Hold requests briefly instead, then answer 503.
+const DB_WAIT_MS = 25000;
+
+function waitForDb(timeoutMs) {
+    if (mongoose.connection.readyState === 1) return Promise.resolve(true);
+    return new Promise((resolve) => {
+        const onConnected = () => {
+            clearTimeout(timer);
+            resolve(true);
+        };
+        const timer = setTimeout(() => {
+            mongoose.connection.off("connected", onConnected);
+            resolve(false);
+        }, timeoutMs);
+        mongoose.connection.once("connected", onConnected);
+    });
+}
+
+app.use(async (req, res, next) => {
+    if (req.path === "/" || req.path === "/api/health") return next();
+    if (await waitForDb(DB_WAIT_MS)) return next();
+    res.set("Retry-After", "5")
+        .status(503)
+        .json({ error: "The server is starting up. Please try again in a few seconds." });
+});
+
+// ==============================
 // Body parsing
 // ==============================
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));

@@ -18,7 +18,8 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Navbar />
-      <main className="flex-1">
+      {/* Home ends with the contact photo, which blends into the footer; other pages need breathing room */}
+      <main className={`flex-1 ${pathname === "/" ? "" : "pb-16"}`}>
         <Outlet />
       </main>
       <Footer />

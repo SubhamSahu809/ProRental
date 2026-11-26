@@ -33,8 +33,9 @@ export default function Contact() {
 
   return (
     <section id="contact" className="bg-cover bg-center bg-no-repeat scroll-mt-20" style={{ backgroundImage: "url(/images/contact-bg.jpg)" }}>
-      <div className="bg-black/40">
-        <div className="max-w-xl mx-auto flex flex-col items-center px-4 py-16">
+      {/* Darkens the photo and fades it into the footer colour (neutral-900) below */}
+      <div className="bg-gradient-to-b from-black/30 via-black/50 to-neutral-900">
+        <div className="max-w-xl mx-auto flex flex-col items-center px-4 pt-16 pb-24">
           <span className="mb-6 px-4 py-1 rounded-full bg-white text-gray-700 text-xs font-medium shadow">Get in touch</span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-2 leading-tight">
             LET&apos;S MAKE YOUR PROPERTY JOURNEY <br className="hidden sm:block" /> EFFORTLESS

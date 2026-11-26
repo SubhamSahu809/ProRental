@@ -126,6 +126,28 @@ export function formatListingPrice(listing) {
   return listing?.type === "rent" && Number.isFinite(listing?.price) ? `${base}/month` : base;
 }
 
+/** Compact rupees for small spaces: ₹15k, ₹45L, ₹1.2Cr */
+export function formatCompactPrice(price) {
+  if (!Number.isFinite(price)) return "-";
+  if (price >= 1e7) return `₹${+(price / 1e7).toFixed(2)}Cr`;
+  if (price >= 1e5) return `₹${+(price / 1e5).toFixed(1)}L`;
+  if (price >= 1e3) return `₹${+(price / 1e3).toFixed(1)}k`;
+  return `₹${price}`;
+}
+
+/** "Today", "2 days ago", "3 weeks ago" */
+export function timeAgo(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "";
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} week${days < 14 ? "" : "s"} ago`;
+  if (days < 365) return `${Math.floor(days / 30)} month${days < 60 ? "" : "s"} ago`;
+  return formatDate(value);
+}
+
 export function formatDate(value) {
   if (!value) return "";
   const date = new Date(value);
